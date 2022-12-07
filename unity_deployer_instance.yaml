@@ -1,0 +1,90 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Metadata:
+  QuickStartDocumentation:
+    EntrypointName: "Launch into an existing VPC"
+Description: "Deploy an EC2 instance into an existing VPC for deployment of Unity"
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Basic configuration
+        Parameters:
+          - VPCID
+          - PrivateSubnetID
+          - KeyPairName
+          - InstanceProfile
+    ParameterLabels:
+      VPCID:
+        default: VPC ID
+      PrivateSubnetID:
+        default: Private subnet ID
+      KeyPairName:
+        default: SSH key name
+      InstanceProfile:
+        default: IAM instance profile
+
+Parameters:
+  VPCID:
+    Type: "AWS::EC2::VPC::Id"
+    Description: ID of your existing VPC (e.g., vpc-0343606e).
+  PrivateSubnetID:
+    Type: "AWS::EC2::Subnet::Id"
+    Description: ID of the private subnet in an Availability Zone of your existing VPC (e.g., subnet-fe9a8b32).
+  KeyPairName:
+    Description: Name of an existing key pair, which allows you to securely connect to your instance after it launches.
+    Type: "AWS::EC2::KeyPair::KeyName"
+  InstanceProfile:
+    Description: name of an IAM instance profile to assign to the EC2 instance 
+    Type: "AWS::IAM::InstanceProfile"
+
+Resources:
+    EC2Instance:
+        Type: "AWS::EC2::Instance"
+        Properties:
+            ImageId: "ami-0f03d969d430caf73"
+            InstanceType: "c6i.xlarge"
+            KeyName: !Ref KeyPairName
+            AvailabilityZone: !Sub "${AWS::Region}a"
+            Tenancy: "default"
+            SubnetId: !Ref PrivateSubnetID
+            EbsOptimized: true
+            SecurityGroupIds: 
+              - !Ref EC2SecurityGroup
+            SourceDestCheck: true
+            BlockDeviceMappings: 
+              - 
+                DeviceName: "/dev/xvda"
+                Ebs: 
+                    Encrypted: false
+                    VolumeSize: 30
+                    SnapshotId: "snap-07cccb5abe925f46e"
+                    VolumeType: "gp2"
+                    DeleteOnTermination: true
+            IamInstanceProfile: !Ref InstanceProfile
+            Tags: 
+              - 
+                Key: "Name"
+                Value: "unity-deployer-instance"
+            HibernationOptions: 
+                Configured: false
+            CpuOptions: 
+                CoreCount: 2
+                ThreadsPerCore: 2
+            EnclaveOptions: 
+                Enabled: false
+
+    EC2SecurityGroup:
+        Type: "AWS::EC2::SecurityGroup"
+        Properties:
+            GroupDescription: "security group for unity-deployer-instance"
+            GroupName: "unity-deployer-instance-sg"
+            VpcId: !Ref VPCID
+            SecurityGroupIngress: 
+              - 
+                CidrIp: "0.0.0.0/0"
+                FromPort: 22
+                IpProtocol: "tcp"
+                ToPort: 22
+            SecurityGroupEgress: 
+              - 
+                CidrIp: "0.0.0.0/0"
+                IpProtocol: "-1"
