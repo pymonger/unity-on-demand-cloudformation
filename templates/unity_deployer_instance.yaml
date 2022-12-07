@@ -1,8 +1,8 @@
 AWSTemplateFormatVersion: "2010-09-09"
+Description: "Deploy an EC2 instance into an existing VPC for deployment of Unity"
 Metadata:
   QuickStartDocumentation:
     EntrypointName: "Launch into an existing VPC"
-Description: "Deploy an EC2 instance into an existing VPC for deployment of Unity"
   AWS::CloudFormation::Interface:
     ParameterGroups:
       - Label:
