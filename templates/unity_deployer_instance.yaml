@@ -11,7 +11,6 @@ Metadata:
           - VPCID
           - PrivateSubnetID
           - KeyPairName
-          - InstanceRole
           - InstanceType
     ParameterLabels:
       VPCID:
@@ -20,8 +19,6 @@ Metadata:
         default: Private subnet ID
       KeyPairName:
         default: SSH key name
-      InstanceRole:
-        default: IAM instance role name
       InstanceType:
         default: EC2 instance type
 
@@ -35,10 +32,6 @@ Parameters:
   KeyPairName:
     Description: Name of an existing key pair, which allows you to securely connect to your instance after it launches.
     Type: "AWS::EC2::KeyPair::KeyName"
-  InstanceRole:
-    Description: Name of an existing IAM role which allows an instance to access AWS services.
-    Type: String
-    Default: MCP-SSM-CloudWatch
   InstanceType:
     AllowedValues:
     - c3.xlarge
@@ -62,6 +55,27 @@ Mappings:
       HVM64: ami-0f03d969d430caf73
 
 Resources:
+  InstanceRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      Path: "/"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+        - "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+        - "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"
+        - "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryPowerUser"
+        # TODO: need to generalize for JPL, MCP and normal AWS accounts; currently these are specific to MCP
+        - !Sub "arn:aws:iam::${AWS::AccountId}:policy/mcp-tenantOperator"
+        - !Sub "arn:aws:iam::${AWS::AccountId}:policy/DatalakeKinesisPolicy"
+        - !Sub "arn:aws:iam::${AWS::AccountId}:policy/McpToolsAccessPolicy"
+      PermissionsBoundary: !Sub "arn:aws:iam::${AWS::AccountId}:policy/mcp-tenantOperator"
   InstanceProfile:
     Type: "AWS::IAM::InstanceProfile"
     Properties:
