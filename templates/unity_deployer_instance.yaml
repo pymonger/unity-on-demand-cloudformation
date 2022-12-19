@@ -1,8 +1,11 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "Deploy an EC2 instance into an existing VPC for deployment of Unity"
+
+Description: Deploy an EC2 instance into an existing VPC for deployment of Unity
+
 Metadata:
   QuickStartDocumentation:
-    EntrypointName: "Launch into an existing VPC"
+    EntrypointName: Launch into an existing VPC
+
   AWS::CloudFormation::Interface:
     ParameterGroups:
       - Label:
@@ -27,28 +30,32 @@ Metadata:
 
 Parameters:
   VPCID:
-    Type: "AWS::EC2::VPC::Id"
     Description: ID of your existing VPC (e.g., vpc-0343606e).
+    Type: AWS::EC2::VPC::Id
+
   PrivateSubnetID:
-    Type: "AWS::EC2::Subnet::Id"
     Description: ID of the private subnet in an Availability Zone of your existing VPC (e.g., subnet-fe9a8b32).
+    Type: AWS::EC2::Subnet::Id
+
   KeyPairName:
     Description: Name of an existing key pair, which allows you to securely connect to your instance after it launches.
-    Type: "AWS::EC2::KeyPair::KeyName"
+    Type: AWS::EC2::KeyPair::KeyName
+
   InstanceType:
-    AllowedValues:
-    - c3.xlarge
-    - c4.xlarge
-    - c5.xlarge
-    - c6i.xlarge
-    ConstraintDescription: must be a valid EC2 instance type.
-    Default: c6i.xlarge
     Description: EC2 instance type
     Type: String
+    AllowedValues:
+      - c3.xlarge
+      - c4.xlarge
+      - c5.xlarge
+      - c6i.xlarge
+    Default: c6i.xlarge
+    ConstraintDescription: must be a valid EC2 instance type.
+
   PrivilegedPolicyName:
-    Description: Name of an existing IAM role which allows privileged access to AWS services.
+    Description: Name of an existing IAM policy which allows privileged access to AWS services.
     Type: String
-    Default: mcp-tenantOperator
+    Default: mcp-tenantOperator-AMI-APIG
 
 Mappings:
   AWSRegion2AMI:
@@ -63,59 +70,168 @@ Mappings:
 
 Resources:
   InstanceRole:
-    Type: "AWS::IAM::Role"
+    Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
-        Version: 2012-10-17
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
               Service: ec2.amazonaws.com
             Action: sts:AssumeRole
-      Path: "/"
+      Path: /
       ManagedPolicyArns:
-        - "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
-        - "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
-        - "arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess"
-        - "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryPowerUser"
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+        - arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
+        - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryPowerUser
         # TODO: need to generalize for JPL, MCP and normal AWS accounts; currently these are specific to MCP
         - !Sub "arn:aws:iam::${AWS::AccountId}:policy/${PrivilegedPolicyName}"
         - !Sub "arn:aws:iam::${AWS::AccountId}:policy/DatalakeKinesisPolicy"
         - !Sub "arn:aws:iam::${AWS::AccountId}:policy/McpToolsAccessPolicy"
       PermissionsBoundary: !Sub "arn:aws:iam::${AWS::AccountId}:policy/${PrivilegedPolicyName}"
+
   InstanceProfile:
-    Type: "AWS::IAM::InstanceProfile"
+    Type: AWS::IAM::InstanceProfile
     Properties:
-      Path: "/"
+      Path: /
       Roles:
         - !Ref InstanceRole
 
-  EC2Instance:
-    Type: "AWS::EC2::Instance"
+  DeployerInstance:
+    CreationPolicy:
+      ResourceSignal:
+        Timeout: PT15M
+    Type: AWS::EC2::Instance
+    Metadata:
+      AWS::CloudFormation::Init:
+        configSets:
+          deployer_install:
+            - install_cfn
+            - install_deployer
+            #- configure_deployer
+        install_cfn:
+          files:
+            /etc/cfn/cfn-hup.conf:
+              content: !Sub |
+                [main]
+                stack= ${AWS::StackId}
+                region=${AWS::Region}
+              group: root
+              mode: "000400"
+              owner: root
+            /etc/cfn/hooks.d/cfn-auto-reloader.conf:
+              content: !Sub |
+                [cfn-auto-reloader-hook]
+                triggers=post.update
+                path=Resources.DeployerInstance.Metadata.AWS::CloudFormation::Init
+                action=/opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource DeployerInstance --configsets deployer_install --url https://stackbuilder.amazonaws.com
+              group: root
+              mode: "000400"
+              owner: root
+          services:
+            sysvinit:
+              cfn-hup:
+                enabled: true
+                ensureRunning: true
+                files:
+                  - /etc/cfn/cfn-hup.conf
+                  - /etc/cfn/hooks.d/cfn-auto-reloader.conf
+        install_deployer:
+          commands:
+            01_install_eksctl:
+              command: !Sub |
+                set -ex \
+                && echo "running 01_install_eksctl" \
+                && curl --silent --location "https://github.com/weaveworks/eksctl/releases/latest/download/eksctl_$(uname -s)_amd64.tar.gz" | tar xz -C /tmp \
+                && sudo mv /tmp/eksctl /usr/local/bin
+              test: !Sub |
+                $(eksctl version >/dev/null 2>&1 </dev/null); (( $? != 0 ))
+            02_install_kubectl:
+              command: !Sub |
+                set -ex \
+                && echo "running 02_install_kubectl" \
+                && curl --silent -o /tmp/kubectl https://s3.${AWS::Region}.amazonaws.com/amazon-eks/1.24.7/2022-10-31/bin/linux/amd64/kubectl \
+                && sudo mv /tmp/kubectl /usr/local/bin \
+                && sudo chmod +x /usr/local/bin/kubectl
+              test: !Sub |
+                $(kubectl version --client >/dev/null 2>&1 </dev/null); (( $? != 0 ))
+              #files:
+              #  /tmp/create-deployer-config:
+              #    content: !Sub |
+              #      #!/bin/bash -xe
+              #      cp /var/www/html/wordpress/wp-config-sample.php /var/www/html/wordpress/wp-config.php
+              #      sed -i "s/'database_name_here'/'${DBName}'/g" wp-config.php
+              #      sed -i "s/'username_here'/'${DBUser}'/g" wp-config.php
+              #      sed -i "s/'password_here'/'${DBPassword}'/g" wp-config.php                                    
+              #    group: root
+              #    mode: '000500'
+              #    owner: root
+              #  /tmp/setup.mysql:
+              #    content: !Sub |
+              #      CREATE DATABASE ${DBName};
+              #      CREATE USER '${DBUser}'@'localhost' IDENTIFIED BY '${DBPassword}';
+              #      GRANT ALL ON ${DBName}.* TO '${DBUser}'@'localhost'; 
+              #      FLUSH PRIVILEGES;
+              #    group: root
+              #    mode: '000400'
+              #    owner: root
+              #packages:
+              #  yum:
+              #    httpd: []
+              #    mysql: []
+              #    mysql-devel: []
+              #    mysql-libs: []
+              #    mysql-server: []
+              #    php: []
+              #    php-mysql: []
+              #services:
+              #  sysvinit:
+              #    httpd:
+              #      enabled: true
+              #      ensureRunning: true
+              #    mysqld:
+              #      enabled: true
+              #      ensureRunning: true
+              #sources:
+              #  /var/www/html: http://wordpress.org/latest.tar.gz
+        #configure_deployer:
+        #  commands:
+        #    01_configure_deployer_step:
+        #      command: !Sub |
+        #        echo "running 01_configure_deployer_step"
+        #      test: !Sub |
+        #        $(echo "running 01_configure_deployer_step" >/dev/null 2>&1 </dev/null); (( $? != 0 ))
     Properties:
       ImageId: !FindInMap [AWSRegion2AMI, !Ref 'AWS::Region', HVM64]
       InstanceType: !Ref InstanceType
       KeyName: !Ref KeyPairName
       SubnetId: !Ref PrivateSubnetID
       EbsOptimized: true
-      SecurityGroupIds: 
-        - !Ref EC2SecurityGroup
+      SecurityGroupIds:
+        - !Ref DeployerSecurityGroup
       IamInstanceProfile: !Ref InstanceProfile
-      Tags: 
-        - Key: "Name"
-          Value: "unity-deployer-instance"
+      Tags:
+        - Key: Name
+          Value: unity-deployer-instance
+      UserData: !Base64
+        Fn::Sub: |
+          #!/bin/bash -xe
+          sudo yum update -y aws-cfn-bootstrap
+          sudo /opt/aws/bin/cfn-init -v --stack ${AWS::StackId} --resource DeployerInstance --configsets deployer_install --region ${AWS::Region}
+          sudo /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackId} --resource DeployerInstance --region ${AWS::Region}
 
-  EC2SecurityGroup:
-    Type: "AWS::EC2::SecurityGroup"
+  DeployerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: "security group for unity-deployer-instance"
-      GroupName: "unity-deployer-instance-sg"
+      GroupDescription: security group for unity-deployer-instance
+      GroupName: unity-deployer-instance-sg
       VpcId: !Ref VPCID
-      SecurityGroupIngress: 
-        - CidrIp: "0.0.0.0/0"
+      SecurityGroupIngress:
+        - CidrIp: 0.0.0.0/0
           FromPort: 22
-          IpProtocol: "tcp"
+          IpProtocol: tcp
           ToPort: 22
-      SecurityGroupEgress: 
-        - CidrIp: "0.0.0.0/0"
+      SecurityGroupEgress:
+        - CidrIp: 0.0.0.0/0
           IpProtocol: "-1"
