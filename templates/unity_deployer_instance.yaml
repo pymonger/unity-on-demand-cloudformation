@@ -168,8 +168,8 @@ Resources:
               command: !Sub |
                 set -ex \
                 && echo "running 03_docker_for_ec2_user" \
-                && ec2_user=$(whoami)
-                && sudo usermod -G docker ${ec2_user}
+                && ec2_user=$(whoami) \
+                && sudo usermod -G docker ${!ec2_user}
     Properties:
       ImageId: !FindInMap [AWSRegion2AMI, !Ref 'AWS::Region', HVM64]
       InstanceType: !Ref InstanceType
