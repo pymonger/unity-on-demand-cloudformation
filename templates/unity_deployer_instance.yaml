@@ -164,12 +164,12 @@ Resources:
                 && sudo chmod +x /usr/local/bin/kubectl
               test: !Sub |
                 $(kubectl version --client >/dev/null 2>&1 </dev/null); (( $? != 0 ))
-            03_docker_for_ec2_user:
+            03_docker_for_ec2_users:
               command: !Sub |
                 set -ex \
-                && echo "running 03_docker_for_ec2_user" \
-                && ec2_user=$(whoami) \
-                && sudo usermod -G docker ${!ec2_user}
+                && echo "running 03_docker_for_ec2_users" \
+                && sudo usermod -G docker ec2-user \
+                && sudo usermod -G docker ssm-user
     Properties:
       ImageId: !FindInMap [AWSRegion2AMI, !Ref 'AWS::Region', HVM64]
       InstanceType: !Ref InstanceType
