@@ -108,7 +108,7 @@ Resources:
         configSets:
           deployer_install:
             - install_cfn
-            - install_deployer
+            - install_deployer_tools
             #- configure_deployer
         install_cfn:
           files:
@@ -137,7 +137,15 @@ Resources:
                 files:
                   - /etc/cfn/cfn-hup.conf
                   - /etc/cfn/hooks.d/cfn-auto-reloader.conf
-        install_deployer:
+        install_deployer_tools:
+          packages:
+            yum:
+              docker: []
+          services:
+            sysvinit:
+              docker:
+                enabled: true
+                ensureRunning: true
           commands:
             01_install_eksctl:
               command: !Sub |
@@ -156,52 +164,11 @@ Resources:
                 && sudo chmod +x /usr/local/bin/kubectl
               test: !Sub |
                 $(kubectl version --client >/dev/null 2>&1 </dev/null); (( $? != 0 ))
-              #files:
-              #  /tmp/create-deployer-config:
-              #    content: !Sub |
-              #      #!/bin/bash -xe
-              #      cp /var/www/html/wordpress/wp-config-sample.php /var/www/html/wordpress/wp-config.php
-              #      sed -i "s/'database_name_here'/'${DBName}'/g" wp-config.php
-              #      sed -i "s/'username_here'/'${DBUser}'/g" wp-config.php
-              #      sed -i "s/'password_here'/'${DBPassword}'/g" wp-config.php                                    
-              #    group: root
-              #    mode: '000500'
-              #    owner: root
-              #  /tmp/setup.mysql:
-              #    content: !Sub |
-              #      CREATE DATABASE ${DBName};
-              #      CREATE USER '${DBUser}'@'localhost' IDENTIFIED BY '${DBPassword}';
-              #      GRANT ALL ON ${DBName}.* TO '${DBUser}'@'localhost'; 
-              #      FLUSH PRIVILEGES;
-              #    group: root
-              #    mode: '000400'
-              #    owner: root
-              #packages:
-              #  yum:
-              #    httpd: []
-              #    mysql: []
-              #    mysql-devel: []
-              #    mysql-libs: []
-              #    mysql-server: []
-              #    php: []
-              #    php-mysql: []
-              #services:
-              #  sysvinit:
-              #    httpd:
-              #      enabled: true
-              #      ensureRunning: true
-              #    mysqld:
-              #      enabled: true
-              #      ensureRunning: true
-              #sources:
-              #  /var/www/html: http://wordpress.org/latest.tar.gz
-        #configure_deployer:
-        #  commands:
-        #    01_configure_deployer_step:
-        #      command: !Sub |
-        #        echo "running 01_configure_deployer_step"
-        #      test: !Sub |
-        #        $(echo "running 01_configure_deployer_step" >/dev/null 2>&1 </dev/null); (( $? != 0 ))
+            03_docker_for_ec2_user:
+              command: !Sub |
+                set -ex \
+                && echo "running 03_docker_for_ec2_user" \
+                && sudo usermod -G docker $(whoami)
     Properties:
       ImageId: !FindInMap [AWSRegion2AMI, !Ref 'AWS::Region', HVM64]
       InstanceType: !Ref InstanceType
