@@ -101,7 +101,7 @@ Resources:
   DeployerInstance:
     CreationPolicy:
       ResourceSignal:
-        Timeout: PT15M
+        Timeout: PT60M
     Type: AWS::EC2::Instance
     Metadata:
       AWS::CloudFormation::Init:
@@ -109,7 +109,7 @@ Resources:
           deployer_install:
             - install_cfn
             - install_deployer_tools
-            #- configure_deployer
+            - create_eks_cluster
         install_cfn:
           files:
             /etc/cfn/cfn-hup.conf:
@@ -169,6 +169,79 @@ Resources:
                 set -ex \
                 && echo "running 03_docker_for_ec2_user" \
                 && usermod -a -G docker ec2-user
+        create_eks_cluster:
+          files:
+            /home/ec2-user/eksctl-config.yaml:
+              content: !Sub |
+                apiVersion: eksctl.io/v1alpha5
+                kind: ClusterConfig
+                
+                iam:
+                  serviceRoleARN:
+                  serviceRolePermissionsBoundary: arn:aws:iam::${AWS::AccountId}:policy/${PrivilegedPolicyName}
+                  withOIDC: false
+                
+                metadata:
+                  name: unity-sps-on-demand
+                  region: ${AWS::Region}
+                  version: "1.23"
+                  tags:
+                    service: "MAAP-HEC"
+                    project: "MAAP-HEC"
+                
+                vpc:
+                  subnets:
+                    private:
+                      us-west-2b: { id: subnet-01dd01ca997ebc233 }
+                      us-west-2a: { id: subnet-0379747e5833aa2c5 }
+                    public:
+                      us-west-2b: { id: subnet-047ca90901d826d96 }
+                      us-west-2a: { id: subnet-0bb48585d511aaf74 }
+                  securityGroup:
+                  sharedNodeSecurityGroup:
+                  manageSharedNodeSecurityGroupRules: true
+                
+                managedNodeGroups:
+                  - name: defaultgroupNodeGroup
+                    minSize: 1
+                    maxSize: 2
+                    desiredCapacity: 1
+                    instanceType: m6i.xlarge
+                    ami: ami-0886544fa915698f0
+                    spot: true
+                    tags:
+                      service: "MAAP-HEC"
+                      project: "MAAP-HEC"
+                    iam:
+                      attachPolicyARNs:
+                        - arn:aws:iam::${AWS::AccountId}:policy/DatalakeKinesisPolicy
+                        - arn:aws:iam::${AWS::AccountId}:policy/McpToolsAccessPolicy
+                        - arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy
+                        - arn:aws:iam::aws:policy/AmazonS3FullAccess
+                        - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+                        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+                        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+                        - arn:aws:iam::aws:policy/AmazonSSMFullAccess
+                        - arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy
+                        - arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy
+                      instanceRoleARN:
+                      instanceRolePermissionsBoundary: arn:aws:iam::${AWS::AccountId}:policy/${PrivilegedPolicyName}
+                      withAddonPolicies:
+                        autoScaler: true
+                    privateNetworking: true
+                    overrideBootstrapCommand: |
+                      #!/bin/bash
+                      /etc/eks/bootstrap.sh unity-sps-on-demand
+              group: ec2-user
+              mode: '000644'
+              owner: ec2-user
+          commands:
+            01_create_cluster:
+              command: !Sub |
+                set -ex \
+                && echo "running 01_create_cluster" \
+                && eksctl create cluster -f eksctl-config.yaml
+              cwd: /home/ec2-user
     Properties:
       ImageId: !FindInMap [AWSRegion2AMI, !Ref 'AWS::Region', HVM64]
       InstanceType: !Ref InstanceType
