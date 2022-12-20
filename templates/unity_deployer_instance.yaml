@@ -152,7 +152,7 @@ Resources:
                 set -ex \
                 && echo "running 01_install_eksctl" \
                 && curl --silent --location "https://github.com/weaveworks/eksctl/releases/latest/download/eksctl_$(uname -s)_amd64.tar.gz" | tar xz -C /tmp \
-                && sudo mv /tmp/eksctl /usr/local/bin
+                && mv /tmp/eksctl /usr/local/bin
               test: !Sub |
                 $(eksctl version >/dev/null 2>&1 </dev/null); (( $? != 0 ))
             02_install_kubectl:
@@ -160,16 +160,15 @@ Resources:
                 set -ex \
                 && echo "running 02_install_kubectl" \
                 && curl --silent -o /tmp/kubectl https://s3.${AWS::Region}.amazonaws.com/amazon-eks/1.24.7/2022-10-31/bin/linux/amd64/kubectl \
-                && sudo mv /tmp/kubectl /usr/local/bin \
-                && sudo chmod +x /usr/local/bin/kubectl
+                && mv /tmp/kubectl /usr/local/bin \
+                && chmod +x /usr/local/bin/kubectl
               test: !Sub |
                 $(kubectl version --client >/dev/null 2>&1 </dev/null); (( $? != 0 ))
-            03_docker_for_ec2_users:
+            03_docker_for_ec2_user:
               command: !Sub |
                 set -ex \
-                && echo "running 03_docker_for_ec2_users" \
-                && sudo usermod -G docker ec2-user \
-                && sudo usermod -G docker ssm-user
+                && echo "running 03_docker_for_ec2_user" \
+                && usermod -a -G docker ec2-user
     Properties:
       ImageId: !FindInMap [AWSRegion2AMI, !Ref 'AWS::Region', HVM64]
       InstanceType: !Ref InstanceType
@@ -185,9 +184,9 @@ Resources:
       UserData: !Base64
         Fn::Sub: |
           #!/bin/bash -xe
-          sudo yum update -y aws-cfn-bootstrap
-          sudo /opt/aws/bin/cfn-init -v --stack ${AWS::StackId} --resource DeployerInstance --configsets deployer_install --region ${AWS::Region}
-          sudo /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackId} --resource DeployerInstance --region ${AWS::Region}
+          yum update -y aws-cfn-bootstrap
+          /opt/aws/bin/cfn-init -v --stack ${AWS::StackId} --resource DeployerInstance --configsets deployer_install --region ${AWS::Region}
+          /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackId} --resource DeployerInstance --region ${AWS::Region}
 
   DeployerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
