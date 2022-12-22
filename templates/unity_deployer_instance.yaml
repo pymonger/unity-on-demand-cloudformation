@@ -110,6 +110,7 @@ Resources:
             - install_cfn
             - install_deployer_tools
             - create_eks_cluster
+            - deploy_sps
         install_cfn:
           files:
             /etc/cfn/cfn-hup.conf:
@@ -138,9 +139,28 @@ Resources:
                   - /etc/cfn/cfn-hup.conf
                   - /etc/cfn/hooks.d/cfn-auto-reloader.conf
         install_deployer_tools:
+          files:
+            /home/ec2-user/.bash_profile:
+              content: !Sub |
+                # .bash_profile
+                
+                # Get the aliases and functions
+                if [ -f ~/.bashrc ]; then
+                        . ~/.bashrc
+                fi
+                
+                # User specific environment and startup programs
+                
+                PATH=$HOME/.local/bin:$HOME/bin:/usr/local/bin:$PATH
+                
+                export PATH
+              group: ec2-user
+              mode: "000644"
+              owner: ec2-user
           packages:
             yum:
               docker: []
+              git: []
           services:
             sysvinit:
               docker:
@@ -152,16 +172,20 @@ Resources:
                 set -ex \
                 && echo "running 01_install_eksctl" \
                 && curl --silent --location "https://github.com/weaveworks/eksctl/releases/latest/download/eksctl_$(uname -s)_amd64.tar.gz" | tar xz -C /tmp \
-                && mv /tmp/eksctl /usr/local/bin
+                && mv /tmp/eksctl /usr/local/bin \
+                && chmod +x /usr/local/bin/eksctl \
+                && ln -s /usr/local/bin/eksctl /bin/eksctl
               test: !Sub |
                 $(eksctl version >/dev/null 2>&1 </dev/null); (( $? != 0 ))
             02_install_kubectl:
+              # TODO: install the version of kubectl that matches the k8s server version specified above
               command: !Sub |
                 set -ex \
                 && echo "running 02_install_kubectl" \
                 && curl --silent -o /tmp/kubectl https://s3.${AWS::Region}.amazonaws.com/amazon-eks/1.24.7/2022-10-31/bin/linux/amd64/kubectl \
                 && mv /tmp/kubectl /usr/local/bin \
-                && chmod +x /usr/local/bin/kubectl
+                && chmod +x /usr/local/bin/kubectl \
+                && ln -s /usr/local/bin/kubectl /bin/kubectl
               test: !Sub |
                 $(kubectl version --client >/dev/null 2>&1 </dev/null); (( $? != 0 ))
             03_docker_for_ec2_user:
@@ -169,6 +193,25 @@ Resources:
                 set -ex \
                 && echo "running 03_docker_for_ec2_user" \
                 && usermod -a -G docker ec2-user
+            04_install_tfenv:
+              command: !Sub |
+                set -ex \
+                && echo "running 04_install_tfenv" \
+                && git clone --depth=1 https://github.com/tfutils/tfenv.git /home/ec2-user/.tfenv \
+                && chown -R ec2-user:ec2-user /home/ec2-user/.tfenv \
+                && ln -s /home/ec2-user/.tfenv/bin/* /usr/local/bin
+            05_clone_unity_sps_repo:
+              command: !Sub |
+                set -ex \
+                && echo "running 05_clone_unity_sps_repo" \
+                && git clone https://github.com/unity-sds/unity-sps-prototype.git /home/ec2-user/unity-sps-prototype \
+                && chown -R ec2-user:ec2-user /home/ec2-user/unity-sps-prototype
+            06_remove_outdated_awscli:
+              command: !Sub |
+                set -ex \
+                && echo "running 06_remove_outdated_awscli" \
+                && yum remove awscli -y \
+                && ln -s /usr/local/bin/aws /bin/aws
         create_eks_cluster:
           files:
             /home/ec2-user/eksctl-config.yaml:
@@ -182,19 +225,24 @@ Resources:
                   withOIDC: false
                 
                 metadata:
+                  # TODO: make this a parameter
                   name: unity-sps-on-demand
                   region: ${AWS::Region}
-                  version: "1.23"
+                  # TODO: make this a parameter
+                  version: "1.24"
                   tags:
+                    # TODO: make these parameters
                     service: "MAAP-HEC"
                     project: "MAAP-HEC"
                 
                 vpc:
                   subnets:
                     private:
+                      # TODO: make these parameters
                       us-west-2b: { id: subnet-01dd01ca997ebc233 }
                       us-west-2a: { id: subnet-0379747e5833aa2c5 }
                     public:
+                      # TODO: make these parameters
                       us-west-2b: { id: subnet-047ca90901d826d96 }
                       us-west-2a: { id: subnet-0bb48585d511aaf74 }
                   securityGroup:
@@ -206,10 +254,12 @@ Resources:
                     minSize: 1
                     maxSize: 2
                     desiredCapacity: 1
+                    # TODO: make this a parameter
                     instanceType: m6i.xlarge
                     ami: ami-0886544fa915698f0
                     spot: true
                     tags:
+                      # TODO: make these parameters
                       service: "MAAP-HEC"
                       project: "MAAP-HEC"
                     iam:
@@ -240,8 +290,112 @@ Resources:
               command: !Sub |
                 set -ex \
                 && echo "running 01_create_cluster" \
-                && eksctl create cluster -f eksctl-config.yaml
+                && sudo -i -u ec2-user eksctl create cluster -f eksctl-config.yaml
               cwd: /home/ec2-user
+            02_configure_cluster:
+              command: !Sub |
+                set -ex \
+                && echo "running 02_configure_cluster" \
+                && sudo -i -u ec2-user aws eks update-kubeconfig --region ${AWS::Region} --name unity-sps-on-demand \
+                && sudo -i -u ec2-user kubectl set env daemonset -n kube-system aws-node AWS_VPC_K8S_CNI_EXTERNALSNAT=true \
+                && sudo -i -u ec2-user eksctl create iamidentitymapping --cluster unity-sps-on-demand --region=${AWS::Region} --arn arn:aws:iam::${AWS::AccountId}:role/mcp-tenantDeveloper --group system:masters --username admin \
+                && sudo -i -u ec2-user eksctl create iamidentitymapping --cluster unity-sps-on-demand --region=${AWS::Region} --arn arn:aws:iam::${AWS::AccountId}:role/mcp-tenantOperator --group system:masters --username admin \
+                && sudo -i -u ec2-user kubectl apply -k "github.com/kubernetes-sigs/aws-ebs-csi-driver/deploy/kubernetes/overlays/stable/?ref=release-1.14"
+              cwd: /home/ec2-user
+        deploy_sps:
+          files:
+            /home/ec2-user/unity-sps-prototype/terraform-unity/terraform.tfvars:
+              content: !Sub |
+                celeryconfig_filename       = "celeryconfig_remote.py"
+                container_registry_owner    = ""
+                container_registry_pat      = ""
+                container_registry_server   = ""
+                container_registry_username = ""
+                counter                     = "1"
+                datasets_filename           = "datasets.remote.template.json"
+                deployment_environment      = "mcp"
+                docker_images = {
+                  "ades_wpst_api": "ghcr.io/unity-sds/unity-sps-prototype/ades-wpst-api:unity-v0.0.1",
+                  "busybox": "k8s.gcr.io/busybox",
+                  "hysds_core": "ghcr.io/unity-sds/unity-sps-prototype/hysds-core:unity-v0.0.1",
+                  "hysds_factotum": "ghcr.io/unity-sds/unity-sps-prototype/hysds-factotum:unity-v0.0.1",
+                  "hysds_grq2": "ghcr.io/unity-sds/unity-sps-prototype/hysds-grq2:unity-v0.0.1",
+                  "hysds_mozart": "ghcr.io/unity-sds/unity-sps-prototype/hysds-mozart:unity-v0.0.1",
+                  "hysds_ui": "ghcr.io/unity-sds/unity-sps-prototype/hysds-ui-remote:unity-v0.0.1",
+                  "hysds_verdi": "ghcr.io/unity-sds/unity-sps-prototype/hysds-verdi:unity-v0.0.1",
+                  "logstash": "docker.elastic.co/logstash/logstash:7.10.2",
+                  "mc": "minio/mc:RELEASE.2022-03-13T22-34-00Z",
+                  "minio": "minio/minio:RELEASE.2022-03-17T06-34-49Z",
+                  "rabbitmq": "rabbitmq:3-management",
+                  "redis": "redis:latest"
+                }
+                kubeconfig_filepath = "~/.kube/config"
+                mozart_es = {
+                  "volume_claim_template": {
+                    "storage_class_name": "gp2-sps"
+                  }
+                }
+                namespace = "hysds"
+                node_port_map = {
+                  "ades_wpst_api_service": 30011,
+                  "grq2_es": 30012,
+                  "grq2_service": 30002,
+                  "hysds_ui_service": 30009,
+                  "minio_service_api": 30007,
+                  "minio_service_interface": 30008,
+                  "mozart_es": 30013,
+                  "mozart_service": 30001,
+                  "rabbitmq_mgmt_service_cluster_rpc" : 30003,
+                  "rabbitmq_service_cluster_rpc" : 30006,
+                  "rabbitmq_service_epmd" : 30004,
+                  "rabbitmq_service_listener" : 30005,
+                  "redis_service" : 30010
+                }
+                project = "maap-hec"
+                service_port_map = {
+                  "mozart_service" : 48888,
+                  "grq2_service" : 48878,
+                  "rabbitmq_mgmt_service_cluster_rpc" : 55672,
+                  "rabbitmq_service_epmd" : 44369,
+                  "rabbitmq_service_listener" : 45672,
+                  "rabbitmq_service_cluster_rpc" : 55672,
+                  "minio_service_api" : 49000,
+                  "minio_service_interface" : 49001,
+                  "hysds_ui_service" : 43000,
+                  "redis_service" : 46379,
+                  "ades_wpst_api_service" : 45001,
+                  "grq2_es" : 49201,
+                  "mozart_es" : 49200
+                }
+                service_type       = "LoadBalancer"
+                uds_client_id      = ""
+                uds_dapa_api       = ""
+                uds_staging_bucket = ""
+                venue              = "dev"
+              group: ec2-user
+              mode: '000644'
+              owner: ec2-user
+          commands:
+            01_terraform_init:
+              command: !Sub |
+                set -ex \
+                && echo "running 01_terraform_init" \
+                && sudo -i -u ec2-user tfenv install \
+                && sudo -u ec2-user /usr/local/bin/terraform init
+              cwd: /home/ec2-user/unity-sps-prototype/terraform-unity
+            # NOTE: create gp2-sps storageclass and set as default first to avoid race conditions (2 defaults)
+            02_terraform_apply_gp2-sps:
+              command: !Sub |
+                set -ex \
+                && echo "running 02_terraform_apply_gp2-sps" \
+                && sudo -u ec2-user /usr/local/bin/terraform apply -target=module.unity-sps-hysds-cluster.kubernetes_storage_class.gp2-sps -target=module.unity-sps-hysds-cluster.null_resource.unset_default -auto-approve
+              cwd: /home/ec2-user/unity-sps-prototype/terraform-unity
+            03_terraform_apply:
+              command: !Sub |
+                set -ex \
+                && echo "running 03_terraform_apply" \
+                && sudo -u ec2-user /usr/local/bin/terraform apply --auto-approve
+              cwd: /home/ec2-user/unity-sps-prototype/terraform-unity
     Properties:
       ImageId: !FindInMap [AWSRegion2AMI, !Ref 'AWS::Region', HVM64]
       InstanceType: !Ref InstanceType
