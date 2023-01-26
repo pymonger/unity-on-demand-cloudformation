@@ -122,6 +122,7 @@ Resources:
           deployer_install:
             - install_cfn
             - install_deployer_tools
+            - deploy_unity-on-demand-api
             - run_bootstrap
         install_cfn:
           files:
@@ -224,6 +225,33 @@ Resources:
                 && echo "running 06_remove_outdated_awscli" \
                 && yum remove awscli -y \
                 && ln -s /usr/local/bin/aws /bin/aws
+            07_install_serverless:
+              command: !Sub |
+                set -ex \
+                && echo "running 07_install_serverless" \
+                && curl -sSL https://repo.anaconda.com/miniconda/Miniconda3-py39_22.11.1-1-Linux-x86_64.sh -o /tmp/install_miniconda.sh \
+                && chmod 755 /tmp/install_miniconda.sh \
+                && /tmp/install_miniconda.sh -b -p /usr/local -u \
+                && conda install -y nodejs \
+                && npm install -g serverless
+        deploy_unity-on-demand-api:
+          commands:
+            01_clone_repo:
+              command: !Sub |
+                set -ex \
+                && echo "running 01_clone_repo" \
+                && git clone https://github.com/unity-sds/unity-on-demand-api.git /home/ec2-user/unity-on-demand-api \
+                && chown -R ec2-user:ec2-user /home/ec2-user/unity-on-demand-api
+              cwd: /home/ec2-user
+            02_run_serverless_deploy:
+              command: !Sub |
+                set -ex \
+                && echo "running 02_run_serverless_deploy" \
+                && sudo -i -u ec2-user bash -c "cd ~/unity-on-demand-api \
+                   && serverless plugin install -n serverless-python-requirements \
+                   && serverless plugin install -n serverless-wsgi \
+                   && serverless deploy --param permissionsBoundaryPolicyName=${PrivilegedPolicyName} --region ${AWS::Region}"
+              cwd: /home/ec2-user/unity-on-demand-api
         run_bootstrap:
           commands:
             01_bootstrap:
@@ -255,7 +283,6 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: security group for unity-deployer-instance
-      GroupName: unity-deployer-instance-sg
       VpcId: !Ref VPCID
       SecurityGroupIngress:
         - CidrIp: 0.0.0.0/0

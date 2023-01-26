@@ -111,6 +111,7 @@ Resources:
             - install_deployer_tools
             - create_eks_cluster
             - deploy_sps
+            - deploy_unity-on-demand-api
         install_cfn:
           files:
             /etc/cfn/cfn-hup.conf:
@@ -212,11 +213,20 @@ Resources:
                 && echo "running 06_remove_outdated_awscli" \
                 && yum remove awscli -y \
                 && ln -s /usr/local/bin/aws /bin/aws
-            07_clone_unity_cs_infra_repo:
+            07_install_serverless:
+              command: !Sub |
+                set -ex \
+                && echo "running 07_install_serverless" \
+                && curl -sSL https://repo.anaconda.com/miniconda/Miniconda3-py39_22.11.1-1-Linux-x86_64.sh -o /tmp/install_miniconda.sh \
+                && chmod 755 /tmp/install_miniconda.sh \
+                && /tmp/install_miniconda.sh -b -p /usr/local -u \
+                && conda install -y nodejs \
+                && npm install -g serverless
+            08_clone_unity_cs_infra_repo:
               # TODO: for now cloning branch updates-4-on-demand; eventually need develop
               command: !Sub |
                 set -ex \
-                && echo "running 07_clone_unity_cs_infra_repo" \
+                && echo "running 08_clone_unity_cs_infra_repo" \
                 && git clone -b updates-4-on-demand https://github.com/unity-sds/unity-cs-infra.git /home/ec2-user/unity-cs-infra \
                 && chown -R ec2-user:ec2-user /home/ec2-user/unity-cs-infra
         create_eks_cluster:
@@ -342,6 +352,24 @@ Resources:
                 && echo "running 03_terraform_apply" \
                 && sudo -u ec2-user /usr/local/bin/terraform apply --auto-approve
               cwd: /home/ec2-user/unity-sps-prototype/terraform-unity
+        deploy_unity-on-demand-api:
+          commands:
+            01_clone_repo:
+              command: !Sub |
+                set -ex \
+                && echo "running 01_clone_repo" \
+                && git clone https://github.com/unity-sds/unity-on-demand-api.git /home/ec2-user/unity-on-demand-api \
+                && chown -R ec2-user:ec2-user /home/ec2-user/unity-on-demand-api
+              cwd: /home/ec2-user
+            02_run_serverless_deploy:
+              command: !Sub |
+                set -ex \
+                && echo "running 02_run_serverless_deploy" \
+                && sudo -i -u ec2-user bash -c "cd ~/unity-on-demand-api \
+                   && serverless plugin install -n serverless-python-requirements \
+                   && serverless plugin install -n serverless-wsgi \
+                   && serverless deploy --param permissionsBoundaryPolicyName=${PrivilegedPolicyName} --region ${AWS::Region}"
+              cwd: /home/ec2-user/unity-on-demand-api
     Properties:
       ImageId: !FindInMap [AWSRegion2AMI, !Ref 'AWS::Region', HVM64]
       InstanceType: !Ref InstanceType
@@ -365,7 +393,6 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: security group for unity-deployer-instance
-      GroupName: unity-deployer-instance-sg
       VpcId: !Ref VPCID
       SecurityGroupIngress:
         - CidrIp: 0.0.0.0/0
