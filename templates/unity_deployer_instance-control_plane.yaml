@@ -16,7 +16,8 @@ Metadata:
           - KeyPairName
           - InstanceType
           - PrivilegedPolicyName
-          - UnityServicesToDeploy
+          - UnityAppsToBootstap
+          - GithubToken
     ParameterLabels:
       VPCID:
         default: VPC ID
@@ -28,8 +29,10 @@ Metadata:
         default: EC2 instance type
       PrivilegedPolicyName:
         default: Privileged (admin-level) IAM policy name
-      UnityServicesToDeploy:
+      UnityAppsToBootstap:
         default: Unity services to deploy by default
+      GithubToken:
+        default: Github token with repo:read access
 
 Parameters:
   VPCID:
@@ -60,15 +63,21 @@ Parameters:
     Type: String
     Default: mcp-tenantOperator-AMI-APIG
 
-  UnityServicesToDeploy:
+  UnityAppsToBootstap:
     Description: Unity services to deploy
     Type: String
     AllowedValues:
+      - test
       - sps
       - ads (not implemented)
       - as (not implemented)
-    Default: sps
+    Default: test
     ConstraintDescription: must be a valid Unity service
+
+  GithubToken:
+    NoEcho: true
+    Description: Github token with repo:read access
+    Type: String
 
 Mappings:
   AWSRegion2AMI:
@@ -257,8 +266,8 @@ Resources:
             01_bootstrap:
               command: !Sub |
                 set -ex \
-                && echo "running 01_bootstrap to deploy ${UnityServicesToDeploy}" \
-                && sudo -i -u ec2-user docker run -d -p 45321:8080 -v /var/run/docker.sock:/var/run/docker.sock -v /usr/bin/docker:/usr/bin/docker ghcr.io/unity-sds/unity-cs-infra:main bootstrap --application ${UnityServicesToDeploy}
+                && echo "running 01_bootstrap to deploy ${UnityAppsToBootstap}" \
+                && sudo -i -u ec2-user docker run -d -p 45321:8080 -e GHTOKEN=${GithubToken} -v /var/run/docker.sock:/var/run/docker.sock -v /usr/bin/docker:/usr/bin/docker ghcr.io/unity-sds/unity-cs-infra:main bootstrap --application ${UnityAppsToBootstap}
               cwd: /home/ec2-user
     Properties:
       ImageId: !FindInMap [AWSRegion2AMI, !Ref 'AWS::Region', HVM64]
