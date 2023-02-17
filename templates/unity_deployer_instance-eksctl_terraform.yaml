@@ -267,6 +267,7 @@ Resources:
                     # TODO: make this a parameter
                     instanceType: m6i.xlarge
                     ami: ami-0886544fa915698f0
+                    amiFamily: AmazonLinux2
                     spot: true
                     tags:
                       # TODO: make these parameters
