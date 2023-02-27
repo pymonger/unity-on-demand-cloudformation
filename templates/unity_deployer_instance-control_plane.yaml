@@ -257,9 +257,10 @@ Resources:
                 set -ex \
                 && echo "running 02_run_serverless_deploy" \
                 && sudo -i -u ec2-user bash -c "cd ~/unity-on-demand-api \
+                   && export STACKID_MD5=$(echo ${AWS::StackId} | md5sum | cut -c 1-5) \
                    && serverless plugin install -n serverless-python-requirements \
                    && serverless plugin install -n serverless-wsgi \
-                   && serverless deploy --param permissionsBoundaryPolicyName=${PrivilegedPolicyName} --region ${AWS::Region}"
+                   && serverless deploy --param permissionsBoundaryPolicyName=${PrivilegedPolicyName} --region ${AWS::Region} --stage \${!STACKID_MD5}"
               cwd: /home/ec2-user/unity-on-demand-api
         run_bootstrap:
           commands:

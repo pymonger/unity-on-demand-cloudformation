@@ -12,15 +12,15 @@ Metadata:
           default: Basic configuration
         Parameters:
           - VPCID
-          - PrivateSubnetID
+          - PublicSubnetID
           - KeyPairName
           - InstanceType
           - PrivilegedPolicyName
     ParameterLabels:
       VPCID:
         default: VPC ID
-      PrivateSubnetID:
-        default: Private subnet ID
+      PublicSubnetID:
+        default: Public subnet ID
       KeyPairName:
         default: SSH key name
       InstanceType:
@@ -33,8 +33,8 @@ Parameters:
     Description: ID of your existing VPC (e.g., vpc-0343606e).
     Type: AWS::EC2::VPC::Id
 
-  PrivateSubnetID:
-    Description: ID of the private subnet in an Availability Zone of your existing VPC (e.g., subnet-fe9a8b32).
+  PublicSubnetID:
+    Description: ID of the public subnet in an Availability Zone of your existing VPC (e.g., subnet-fe9a8b32).
     Type: AWS::EC2::Subnet::Id
 
   KeyPairName:
@@ -249,12 +249,12 @@ Resources:
                   subnets:
                     private:
                       # TODO: make these parameters
-                      us-west-2b: { id: subnet-01dd01ca997ebc233 }
-                      us-west-2a: { id: subnet-0379747e5833aa2c5 }
+                      us-west-2a: { id: subnet-00db2965967acb6b1 }
+                      us-west-2b: { id: subnet-092597c48cfec3f04 }
                     public:
                       # TODO: make these parameters
-                      us-west-2b: { id: subnet-047ca90901d826d96 }
-                      us-west-2a: { id: subnet-0bb48585d511aaf74 }
+                      us-west-2a: { id: subnet-059bc4f467275b59d }
+                      us-west-2b: { id: subnet-0ebdd997cc3ebe58d }
                   securityGroup:
                   sharedNodeSecurityGroup:
                   manageSharedNodeSecurityGroupRules: true
@@ -421,15 +421,16 @@ Resources:
                 set -ex \
                 && echo "running 02_run_serverless_deploy" \
                 && sudo -i -u ec2-user bash -c "cd ~/unity-on-demand-api \
+                   && export STACKID_MD5=$(echo ${AWS::StackId} | md5sum | cut -c 1-5) \
                    && serverless plugin install -n serverless-python-requirements \
                    && serverless plugin install -n serverless-wsgi \
-                   && serverless deploy --param permissionsBoundaryPolicyName=${PrivilegedPolicyName} --region ${AWS::Region}"
+                   && serverless deploy --param permissionsBoundaryPolicyName=${PrivilegedPolicyName} --region ${AWS::Region} --stage \${!STACKID_MD5}"
               cwd: /home/ec2-user/unity-on-demand-api
     Properties:
       ImageId: !FindInMap [AWSRegion2AMI, !Ref 'AWS::Region', HVM64]
       InstanceType: !Ref InstanceType
       KeyName: !Ref KeyPairName
-      SubnetId: !Ref PrivateSubnetID
+      SubnetId: !Ref PublicSubnetID
       EbsOptimized: true
       SecurityGroupIds:
         - !Ref DeployerSecurityGroup
