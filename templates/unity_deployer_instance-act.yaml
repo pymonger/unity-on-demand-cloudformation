@@ -117,7 +117,7 @@ Resources:
             /etc/cfn/cfn-hup.conf:
               content: !Sub |
                 [main]
-                stack= ${AWS::StackId}
+                stack=${AWS::StackId}
                 region=${AWS::Region}
               group: root
               mode: "000400"
