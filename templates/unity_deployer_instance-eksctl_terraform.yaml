@@ -314,12 +314,12 @@ Resources:
                   subnets:
                     private:
                       # TODO: make these parameters
+                      us-west-2b: { id: subnet-092597c48cfec3f04 }
                       us-west-2c: { id: subnet-0ba7d45fe29659a2a }
-                      us-west-2d: { id: subnet-0e4ff7f670ebb4cc3 }
                     public:
                       # TODO: make these parameters
+                      us-west-2b: { id: subnet-0ebdd997cc3ebe58d }
                       us-west-2c: { id: subnet-087b54673c7549e2d }
-                      us-west-2d: { id: subnet-009c32904a8bf3b92 }
                   securityGroup:
                   sharedNodeSecurityGroup:
                   manageSharedNodeSecurityGroupRules: true
