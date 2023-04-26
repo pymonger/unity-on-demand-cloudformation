@@ -278,15 +278,26 @@ Resources:
                 && echo "running 06_remove_outdated_awscli" \
                 && yum remove awscli -y \
                 && ln -s /usr/local/bin/aws /bin/aws
-            07_install_serverless:
+            07_install_conda:
               command: !Sub |
                 set -ex \
-                && echo "running 07_install_serverless" \
+                && echo "running 07_install_conda" \
                 && curl -sSL https://repo.anaconda.com/miniconda/Miniconda3-py39_22.11.1-1-Linux-x86_64.sh -o /tmp/install_miniconda.sh \
                 && chmod 755 /tmp/install_miniconda.sh \
-                && /tmp/install_miniconda.sh -b -p /usr/local -u \
-                && conda install -y nodejs \
-                && npm install -g serverless
+                && /tmp/install_miniconda.sh -b -p /usr/local -u
+            08_install_serverless:
+              command: !Sub |
+                set -ex \
+                && echo "running 08_install_serverless" \
+                && curl -sSL https://nodejs.org/dist/v16.20.0/node-v16.20.0-linux-x64.tar.gz -o /tmp/node-v16.20.0-linux-x64.tar.gz \
+                && tar xvfz /tmp/node-v16.20.0-linux-x64.tar.gz -C /usr/local \
+                && ln -sf /usr/local/node-v16.20.0-linux-x64/bin/node /usr/local/bin/ \
+                && ln -sf /usr/local/node-v16.20.0-linux-x64/bin/corepack /usr/local/bin/ \
+                && ln -sf /usr/local/node-v16.20.0-linux-x64/bin/npx /usr/local/bin/ \
+                && ln -sf /usr/local/node-v16.20.0-linux-x64/bin/npm /usr/local/bin/ \
+                && npm install -g serverless \
+                && ln -sf /usr/local/node-v16.20.0-linux-x64/bin/serverless /usr/local/bin/ \
+                && ln -sf /usr/local/node-v16.20.0-linux-x64/bin/sls /usr/local/bin/
         create_eks_cluster:
           files:
             /home/ec2-user/eksctl-config.yaml:
@@ -307,8 +318,8 @@ Resources:
                   version: "1.24"
                   tags:
                     # TODO: make these parameters
-                    service: "MAAP-HEC"
-                    project: "MAAP-HEC"
+                    service: "nisar"
+                    project: "nisar"
                 
                 vpc:
                   subnets:
@@ -338,8 +349,8 @@ Resources:
                     spot: true
                     tags:
                       # TODO: make these parameters
-                      service: "MAAP-HEC"
-                      project: "MAAP-HEC"
+                      service: "nisar"
+                      project: "nisar"
                     iam:
                       attachPolicyARNs:
                         - arn:aws:iam::${AWS::AccountId}:policy/DatalakeKinesisPolicy
@@ -384,72 +395,64 @@ Resources:
           files:
             /home/ec2-user/unity-sps-prototype/terraform-unity/terraform.tfvars:
               content: !Sub |
-                celeryconfig_filename       = "celeryconfig_remote.py"
-                container_registry_owner    = ""
-                container_registry_pat      = ""
-                container_registry_server   = ""
-                container_registry_username = ""
-                counter                     = "1"
-                datasets_filename           = "datasets.remote.template.json"
-                deployment_environment      = "mcp"
+                celeryconfig_filename                         = "celeryconfig_remote.py"
+                container_registry_owner                      = "unity-sds/unity-sps-prototype"
+                container_registry_server                     = "ghcr.io"
+                container_registry_username                   = "gmanipon"
+                counter                                       = "1"
+                datasets_filename                             = "datasets.remote.template.json"
+                default_group_node_group_launch_template_name = "eksctl-unity-sps-on-demand-${RandomStringResource.RandomString}-nodegroup-defaultgroupNodeGroup"
+                default_group_node_group_name                 = "defaultgroupNodeGroup"
                 docker_images = {
-                  "ades_wpst_api": "ghcr.io/unity-sds/unity-sps-prototype/ades-wpst-api:unity-v0.0.1",
-                  "busybox": "k8s.gcr.io/busybox",
-                  "hysds_core": "ghcr.io/unity-sds/unity-sps-prototype/hysds-core:unity-v0.0.1",
-                  "hysds_factotum": "ghcr.io/unity-sds/unity-sps-prototype/hysds-factotum:unity-v0.0.1",
-                  "hysds_grq2": "ghcr.io/unity-sds/unity-sps-prototype/hysds-grq2:unity-v0.0.1",
-                  "hysds_mozart": "ghcr.io/unity-sds/unity-sps-prototype/hysds-mozart:unity-v0.0.1",
-                  "hysds_ui": "ghcr.io/unity-sds/unity-sps-prototype/hysds-ui-remote:unity-v0.0.1",
-                  "hysds_verdi": "ghcr.io/unity-sds/unity-sps-prototype/hysds-verdi:unity-v0.0.1",
-                  "logstash": "docker.elastic.co/logstash/logstash:7.10.2",
-                  "mc": "minio/mc:RELEASE.2022-03-13T22-34-00Z",
-                  "minio": "minio/minio:RELEASE.2022-03-17T06-34-49Z",
-                  "rabbitmq": "rabbitmq:3-management",
-                  "redis": "redis:latest"
+                  "ades_wpst_api" : "ghcr.io/unity-sds/unity-sps-prototype/ades-wpst-api:unity-v1.0.0",
+                  "busybox" : "busybox:1.36.0",
+                  "dind" : "docker:23.0.3-dind",
+                  "hysds_core" : "ghcr.io/unity-sds/unity-sps-prototype/hysds-core:unity-v1.0.0",
+                  "hysds_factotum" : "ghcr.io/unity-sds/unity-sps-prototype/hysds-factotum:unity-v1.0.0",
+                  "hysds_grq2" : "ghcr.io/unity-sds/unity-sps-prototype/hysds-grq2:unity-v1.0.0",
+                  "hysds_mozart" : "ghcr.io/unity-sds/unity-sps-prototype/hysds-mozart:unity-v1.0.0",
+                  "hysds_ui" : "ghcr.io/unity-sds/unity-sps-prototype/hysds-ui-remote:unity-v1.0.0",
+                  "hysds_verdi" : "ghcr.io/unity-sds/unity-sps-prototype/hysds-verdi:unity-v1.0.0",
+                  "logstash" : "docker.elastic.co/logstash/logstash:7.10.2",
+                  "rabbitmq" : "rabbitmq:3.11.13-management",
+                  "redis" : "redis:7.0.10",
+                  "sps_api" : "ghcr.io/unity-sds/unity-sps-prototype/sps-api:unity-v1.0.0",
+                  "sps_hysds_pge_base" : "ghcr.io/unity-sds/unity-sps-prototype/sps-hysds-pge-base:unity-v1.0.0"
                 }
+                eks_cluster_name    = "unity-sps-on-demand-${RandomStringResource.RandomString}"
+                elb_subnet          = "subnet-087b54673c7549e2d"
                 kubeconfig_filepath = "~/.kube/config"
-                mozart_es = {
-                  "volume_claim_template": {
-                    "storage_class_name": "gp2-sps"
-                  }
-                }
-                namespace = "hysds"
-                node_port_map = {
-                  "ades_wpst_api_service": 30011,
-                  "grq2_es": 30012,
-                  "grq2_service": 30002,
-                  "hysds_ui_service": 30009,
-                  "minio_service_api": 30007,
-                  "minio_service_interface": 30008,
-                  "mozart_es": 30013,
-                  "mozart_service": 30001,
-                  "rabbitmq_mgmt_service_cluster_rpc" : 30003,
-                  "rabbitmq_service_cluster_rpc" : 30006,
-                  "rabbitmq_service_epmd" : 30004,
-                  "rabbitmq_service_listener" : 30005,
-                  "redis_service" : 30010
-                }
-                project = "maap-hec"
+                namespace           = "unity-sps"
+                project             = "nisar"
+                region              = "us-west-2"
+                release             = "23.1"
+                service_area        = "sps"
                 service_port_map = {
-                  "mozart_service" : 48888,
-                  "grq2_service" : 48878,
-                  "rabbitmq_mgmt_service_cluster_rpc" : 55672,
-                  "rabbitmq_service_epmd" : 44369,
-                  "rabbitmq_service_listener" : 45672,
-                  "rabbitmq_service_cluster_rpc" : 55672,
-                  "minio_service_api" : 49000,
-                  "minio_service_interface" : 49001,
-                  "hysds_ui_service" : 43000,
-                  "redis_service" : 46379,
-                  "ades_wpst_api_service" : 45001,
-                  "grq2_es" : 49201,
-                  "mozart_es" : 49200
+                  "ades_wpst_api_service" : 5001,
+                  "grq2_es" : 9201,
+                  "grq2_service" : 8878,
+                  "hysds_ui_service" : 3000,
+                  "mozart_es" : 9200,
+                  "mozart_service" : 8888,
+                  "rabbitmq_mgmt_service_cluster_rpc" : 15672,
+                  "rabbitmq_service_cluster_rpc" : 15672,
+                  "rabbitmq_service_epmd" : 4369,
+                  "rabbitmq_service_listener" : 5672,
+                  "redis_service" : 6379,
+                  "sps_api_service" : 5002
                 }
-                service_type       = "LoadBalancer"
-                uds_client_id      = ""
-                uds_dapa_api       = ""
-                uds_staging_bucket = ""
-                venue              = "dev"
+                service_type                   = "LoadBalancer"
+                uads_development_efs_fsmt_id   = "fsmt-06d161d46a1b16cb6"
+                venue                          = "dev"
+                verdi_node_group_capacity_type = "ON_DEMAND"
+                verdi_node_group_instance_types = [
+                  "m3.medium"
+                ]
+                verdi_node_group_scaling_config = {
+                  "desired_size" : 0,
+                  "max_size" : 10,
+                  "min_size" : 0
+                }
               group: ec2-user
               mode: '000644'
               owner: ec2-user
@@ -461,17 +464,10 @@ Resources:
                 && sudo -i -u ec2-user tfenv install \
                 && sudo -u ec2-user /usr/local/bin/terraform init
               cwd: /home/ec2-user/unity-sps-prototype/terraform-unity
-            # NOTE: create gp2-sps storageclass and set as default first to avoid race conditions (2 defaults)
-            02_terraform_apply_gp2-sps:
+            02_terraform_apply:
               command: !Sub |
                 set -ex \
-                && echo "running 02_terraform_apply_gp2-sps" \
-                && sudo -u ec2-user /usr/local/bin/terraform apply -target=module.unity-sps-hysds-cluster.kubernetes_storage_class.gp2-sps -target=module.unity-sps-hysds-cluster.null_resource.unset_default -auto-approve
-              cwd: /home/ec2-user/unity-sps-prototype/terraform-unity
-            03_terraform_apply:
-              command: !Sub |
-                set -ex \
-                && echo "running 03_terraform_apply" \
+                && echo "running 02_terraform_apply" \
                 && sudo -u ec2-user /usr/local/bin/terraform apply --auto-approve
               cwd: /home/ec2-user/unity-sps-prototype/terraform-unity
         deploy_unity-on-demand-api:
@@ -490,7 +486,10 @@ Resources:
                 && sudo -i -u ec2-user bash -c "cd ~/unity-on-demand-api \
                    && serverless plugin install -n serverless-python-requirements \
                    && serverless plugin install -n serverless-wsgi \
-                   && serverless deploy --param permissionsBoundaryPolicyName=${PrivilegedPolicyName} --region ${AWS::Region} --stage ${RandomStringResource.RandomString}"
+                   && serverless deploy --param cluster_name=unity-sps-on-demand-${RandomStringResource.RandomString} \
+                                        --param permissionsBoundaryPolicyName=${PrivilegedPolicyName} \
+                                        --region ${AWS::Region} \
+                                        --stage ${RandomStringResource.RandomString}"
               cwd: /home/ec2-user/unity-on-demand-api
     Properties:
       ImageId: !FindInMap [AWSRegion2AMI, !Ref 'AWS::Region', HVM64]
@@ -503,7 +502,7 @@ Resources:
       IamInstanceProfile: !Ref InstanceProfile
       Tags:
         - Key: Name
-          Value: unity-deployer-instance
+          Value: !Sub "unity-deployer-instance-${RandomStringResource.RandomString}"
       UserData: !Base64
         Fn::Sub: |
           #!/bin/bash -xe

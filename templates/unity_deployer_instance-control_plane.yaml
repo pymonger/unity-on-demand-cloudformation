@@ -91,6 +91,71 @@ Mappings:
       HVM64: ami-0f03d969d430caf73
 
 Resources:
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: allowLambdaLogging
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "logs:*"
+                Resource: "*"
+      PermissionsBoundary: !Sub "arn:aws:iam::${AWS::AccountId}:policy/${PrivilegedPolicyName}"
+
+  RandomStringLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.handler
+      Runtime: python3.8
+      Role: !GetAtt LambdaExecutionRole.Arn
+      MemorySize: 128
+      Timeout: 20
+      Code:
+        ZipFile: |
+          import cfnresponse
+          import logging
+          import random
+          import string
+          
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+          
+          
+          def get_random_string(event, context):
+              random_string = "".join(
+                  random.choice(string.ascii_lowercase + string.digits)
+                  for i in range(int(event["ResourceProperties"]["Length"]))
+              )
+              logger.info("Random string generated: %s", random_string)
+              return random_string
+          
+          
+          def handler(event, context):
+              response_data = dict()
+              try:
+                  response_data["RandomString"] = get_random_string(event, context)
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, response_data)
+              except Exception as e:
+                  logger.error(e)
+                  cfnresponse.send(event, context, cfnresponse.FAILED, response_data)
+
+  RandomStringResource:
+    Type: AWS::CloudFormation::CustomResource
+    Properties:
+      Length: 5
+      ServiceToken: !GetAtt RandomStringLambdaFunction.Arn
+
   InstanceRole:
     Type: AWS::IAM::Role
     Properties:
@@ -234,15 +299,34 @@ Resources:
                 && echo "running 06_remove_outdated_awscli" \
                 && yum remove awscli -y \
                 && ln -s /usr/local/bin/aws /bin/aws
-            07_install_serverless:
+            07_install_conda:
               command: !Sub |
                 set -ex \
-                && echo "running 07_install_serverless" \
+                && echo "running 07_install_conda" \
                 && curl -sSL https://repo.anaconda.com/miniconda/Miniconda3-py39_22.11.1-1-Linux-x86_64.sh -o /tmp/install_miniconda.sh \
                 && chmod 755 /tmp/install_miniconda.sh \
-                && /tmp/install_miniconda.sh -b -p /usr/local -u \
-                && conda install -y nodejs \
-                && npm install -g serverless
+                && /tmp/install_miniconda.sh -b -p /usr/local -u
+            08_install_serverless:
+              command: !Sub |
+                set -ex \
+                && echo "running 08_install_serverless" \
+                && curl -sSL https://nodejs.org/dist/v16.20.0/node-v16.20.0-linux-x64.tar.gz -o /tmp/node-v16.20.0-linux-x64.tar.gz \
+                && tar xvfz /tmp/node-v16.20.0-linux-x64.tar.gz -C /usr/local \
+                && ln -sf /usr/local/node-v16.20.0-linux-x64/bin/node /usr/local/bin/ \
+                && ln -sf /usr/local/node-v16.20.0-linux-x64/bin/corepack /usr/local/bin/ \
+                && ln -sf /usr/local/node-v16.20.0-linux-x64/bin/npx /usr/local/bin/ \
+                && ln -sf /usr/local/node-v16.20.0-linux-x64/bin/npm /usr/local/bin/ \
+                && npm install -g serverless \
+                && ln -sf /usr/local/node-v16.20.0-linux-x64/bin/serverless /usr/local/bin/ \
+                && ln -sf /usr/local/node-v16.20.0-linux-x64/bin/sls /usr/local/bin/
+        run_bootstrap:
+          commands:
+            01_bootstrap:
+              command: !Sub |
+                set -ex \
+                && echo "running 01_bootstrap to deploy ${UnityAppsToBootstap}" \
+                && sudo -i -u ec2-user docker run -d -p 45321:8080 -e GHTOKEN=${GithubToken} -v /var/run/docker.sock:/var/run/docker.sock -v /usr/bin/docker:/usr/bin/docker ghcr.io/unity-sds/unity-cs-infra:main bootstrap --application ${UnityAppsToBootstap}
+              cwd: /home/ec2-user
         deploy_unity-on-demand-api:
           commands:
             01_clone_repo:
@@ -252,24 +336,19 @@ Resources:
                 && git clone https://github.com/unity-sds/unity-on-demand-api.git /home/ec2-user/unity-on-demand-api \
                 && chown -R ec2-user:ec2-user /home/ec2-user/unity-on-demand-api
               cwd: /home/ec2-user
+            # NOTE: need to get the EKS cluster name created from the control plane (run_bootstrap)
             02_run_serverless_deploy:
               command: !Sub |
                 set -ex \
                 && echo "running 02_run_serverless_deploy" \
                 && sudo -i -u ec2-user bash -c "cd ~/unity-on-demand-api \
-                   && export STACKID_MD5=$(echo ${AWS::StackId} | md5sum | cut -c 1-5) \
                    && serverless plugin install -n serverless-python-requirements \
                    && serverless plugin install -n serverless-wsgi \
-                   && serverless deploy --param permissionsBoundaryPolicyName=${PrivilegedPolicyName} --region ${AWS::Region} --stage \${!STACKID_MD5}"
+                   && serverless deploy --param cluster_name=unity-sps-on-demand-${RandomStringResource.RandomString} \
+                                        --param permissionsBoundaryPolicyName=${PrivilegedPolicyName} \
+                                        --region ${AWS::Region} \
+                                        --stage ${RandomStringResource.RandomString}"
               cwd: /home/ec2-user/unity-on-demand-api
-        run_bootstrap:
-          commands:
-            01_bootstrap:
-              command: !Sub |
-                set -ex \
-                && echo "running 01_bootstrap to deploy ${UnityAppsToBootstap}" \
-                && sudo -i -u ec2-user docker run -d -p 45321:8080 -e GHTOKEN=${GithubToken} -v /var/run/docker.sock:/var/run/docker.sock -v /usr/bin/docker:/usr/bin/docker ghcr.io/unity-sds/unity-cs-infra:main bootstrap --application ${UnityAppsToBootstap}
-              cwd: /home/ec2-user
     Properties:
       ImageId: !FindInMap [AWSRegion2AMI, !Ref 'AWS::Region', HVM64]
       InstanceType: !Ref InstanceType
@@ -281,7 +360,7 @@ Resources:
       IamInstanceProfile: !Ref InstanceProfile
       Tags:
         - Key: Name
-          Value: unity-deployer-instance
+          Value: !Sub "unity-deployer-instance-${RandomStringResource.RandomString}"
       UserData: !Base64
         Fn::Sub: |
           #!/bin/bash -xe
