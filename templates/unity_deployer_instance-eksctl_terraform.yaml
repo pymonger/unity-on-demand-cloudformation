@@ -464,7 +464,7 @@ Resources:
                 && sudo -i -u ec2-user tfenv install \
                 && sudo -u ec2-user /usr/local/bin/terraform init
               cwd: /home/ec2-user/unity-sps-prototype/terraform-unity
-            # NOTE: no longer needed but left here as an example;
+            # NOTE: no longer needed since gp2 should be default but left here as an example;
             # create gp2-sps storageclass and set as default first to avoid race conditions (2 defaults)
             #02_terraform_apply_gp2-sps:
             #  command: !Sub |
