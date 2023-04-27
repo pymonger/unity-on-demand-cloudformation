@@ -409,13 +409,14 @@ Resources:
                 && sudo -i -u ec2-user tfenv install \
                 && sudo -u ec2-user /usr/local/bin/terraform init
               cwd: /home/ec2-user/unity-sps-prototype/terraform-unity
-            # NOTE: create gp2-sps storageclass and set as default first to avoid race conditions (2 defaults)
-            02_terraform_apply_gp2-sps:
-              command: !Sub |
-                set -ex \
-                && echo "running 02_terraform_apply_gp2-sps" \
-                && sudo -u ec2-user /usr/local/bin/terraform apply -target=module.unity-sps-hysds-cluster.kubernetes_storage_class.gp2-sps -target=module.unity-sps-hysds-cluster.null_resource.unset_default -auto-approve
-              cwd: /home/ec2-user/unity-sps-prototype/terraform-unity
+            # NOTE: no longer needed since gp2 should be default but left here as an example;
+            # create gp2-sps storageclass and set as default first to avoid race conditions (2 defaults)
+            #02_terraform_apply_gp2-sps:
+            #  command: !Sub |
+            #    set -ex \
+            #    && echo "running 02_terraform_apply_gp2-sps" \
+            #    && sudo -u ec2-user /usr/local/bin/terraform apply -target=module.unity-sps-hysds-cluster.kubernetes_storage_class.gp2-sps -target=module.unity-sps-hysds-cluster.null_resource.unset_default -auto-approve
+            #  cwd: /home/ec2-user/unity-sps-prototype/terraform-unity
             03_terraform_apply:
               command: !Sub |
                 set -ex \
