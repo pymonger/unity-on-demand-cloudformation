@@ -344,7 +344,7 @@ Resources:
                 container_registry_owner                      = "unity-sds/unity-sps-prototype"
                 container_registry_server                     = "ghcr.io"
                 container_registry_username                   = "gmanipon"
-                counter                                       = "1"
+                counter                                       = "${RandomStringResource.RandomString}"
                 datasets_filename                             = "datasets.remote.template.json"
                 default_group_node_group_launch_template_name = "eksctl-unity-sps-on-demand-${RandomStringResource.RandomString}-nodegroup-defaultgroupNodeGroup"
                 default_group_node_group_name                 = "defaultgroupNodeGroup"
