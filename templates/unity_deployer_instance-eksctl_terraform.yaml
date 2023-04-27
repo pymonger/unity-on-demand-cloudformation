@@ -389,7 +389,7 @@ Resources:
                 && sudo -i -u ec2-user kubectl set env daemonset -n kube-system aws-node AWS_VPC_K8S_CNI_EXTERNALSNAT=true \
                 && sudo -i -u ec2-user eksctl create iamidentitymapping --cluster unity-sps-on-demand-${RandomStringResource.RandomString} --region=${AWS::Region} --arn arn:aws:iam::${AWS::AccountId}:role/mcp-tenantDeveloper --group system:masters --username admin \
                 && sudo -i -u ec2-user eksctl create iamidentitymapping --cluster unity-sps-on-demand-${RandomStringResource.RandomString} --region=${AWS::Region} --arn arn:aws:iam::${AWS::AccountId}:role/mcp-tenantOperator --group system:masters --username admin \
-                && sudo -i -u ec2-user kubectl apply -k "github.com/kubernetes-sigs/aws-ebs-csi-driver/deploy/kubernetes/overlays/stable/?ref=release-1.14"
+                && sudo -i -u ec2-user kubectl apply -k "github.com/kubernetes-sigs/aws-ebs-csi-driver/deploy/kubernetes/overlays/stable/?ref=release-1.18"
               cwd: /home/ec2-user
         deploy_sps:
           files:
@@ -464,10 +464,17 @@ Resources:
                 && sudo -i -u ec2-user tfenv install \
                 && sudo -u ec2-user /usr/local/bin/terraform init
               cwd: /home/ec2-user/unity-sps-prototype/terraform-unity
-            02_terraform_apply:
+            # NOTE: create gp2-sps storageclass and set as default first to avoid race conditions (2 defaults)
+            02_terraform_apply_gp2-sps:
               command: !Sub |
                 set -ex \
-                && echo "running 02_terraform_apply" \
+                && echo "running 02_terraform_apply_gp2-sps" \
+                && sudo -u ec2-user /usr/local/bin/terraform apply -target=module.unity-sps-hysds-cluster.kubernetes_storage_class.gp2-sps -target=module.unity-sps-hysds-cluster.null_resource.unset_default -auto-approve
+              cwd: /home/ec2-user/unity-sps-prototype/terraform-unity
+            03_terraform_apply:
+              command: !Sub |
+                set -ex \
+                && echo "running 03_terraform_apply" \
                 && sudo -u ec2-user /usr/local/bin/terraform apply --auto-approve
               cwd: /home/ec2-user/unity-sps-prototype/terraform-unity
         deploy_unity-on-demand-api:
