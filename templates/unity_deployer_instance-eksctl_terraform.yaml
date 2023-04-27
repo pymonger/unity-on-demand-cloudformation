@@ -476,7 +476,8 @@ Resources:
               command: !Sub |
                 set -ex \
                 && echo "running 03_terraform_apply" \
-                && sudo -u ec2-user /usr/local/bin/terraform apply --auto-approve
+                && sudo -u ec2-user /usr/local/bin/terraform apply --auto-approve \
+                && sudo -u ec2-user /usr/local/bin/terraform output | grep sps_api | awk 'BEGIN{FS="\""}{print "export sps_api="$4}' > sps_api.sh
               cwd: /home/ec2-user/unity-sps-prototype/terraform-unity
         deploy_unity-on-demand-api:
           commands:
@@ -494,7 +495,9 @@ Resources:
                 && sudo -i -u ec2-user bash -c "cd ~/unity-on-demand-api \
                    && serverless plugin install -n serverless-python-requirements \
                    && serverless plugin install -n serverless-wsgi \
+                   && source ~/unity-sps-prototype/terraform-unity/sps_api.sh \
                    && serverless deploy --param cluster_name=unity-sps-on-demand-${RandomStringResource.RandomString} \
+                                        --param sps_api_url=http://${!sps_api}:5002 \
                                         --param permissionsBoundaryPolicyName=${PrivilegedPolicyName} \
                                         --region ${AWS::Region} \
                                         --stage ${RandomStringResource.RandomString}"
