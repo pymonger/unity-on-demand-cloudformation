@@ -124,7 +124,7 @@ Resources:
                 [cfn-auto-reloader-hook]
                 triggers=post.update
                 path=Resources.DeployerInstance.Metadata.AWS::CloudFormation::Init
-                action=/usr/local/bin/cfn-init -v --stack ${AWS::StackName} --resource DeployerInstance --configsets deployer_install --region ${AWS::Region}
+                action=/usr/local/bin/cfn-init -v --stack ${AWS::StackName} --resource DeployerInstance --configsets deployer_install --region ${AWS::Region} --url https://stackbuilder.amazonaws.com
                 runas=root
               group: root
               mode: "000400"
