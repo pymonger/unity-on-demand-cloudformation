@@ -263,7 +263,7 @@ Resources:
               docker.io: []
               git: []
           services:
-            sysvinit:
+            systemd:
               docker:
                 enabled: true
                 ensureRunning: true
