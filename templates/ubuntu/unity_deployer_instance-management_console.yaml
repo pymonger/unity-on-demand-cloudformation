@@ -197,7 +197,7 @@ Resources:
             - install_cfn
             - install_deployer_tools
             - deploy_unity-on-demand-api
-            - run_bootstrap
+            - deploy_management_console
         install_cfn:
           files:
             /etc/cfn/cfn-hup.conf:
@@ -329,14 +329,21 @@ Resources:
                 && npm install -g serverless \
                 && ln -sf /usr/local/node-v16.20.0-linux-x64/bin/serverless /usr/local/bin/ \
                 && ln -sf /usr/local/node-v16.20.0-linux-x64/bin/sls /usr/local/bin/
-        run_bootstrap:
+        deploy_management_console:
           commands:
-            01_bootstrap:
+            01_install_management_console:
               command: !Sub |
                 set -ex \
-                && echo "running 01_bootstrap to deploy ${UnityAppsToBootstap}" \
-                && sudo -i -u ubuntu docker run -d -p 45321:8080 -e GHTOKEN=${GithubToken} -v /var/run/docker.sock:/var/run/docker.sock -v /usr/bin/docker:/usr/bin/docker ghcr.io/unity-sds/unity-cs-infra:main bootstrap --application ${UnityAppsToBootstap}
+                && echo "running 01_install_management_console" \
+                && wget -q -O managementconsole.zip "https://github.com/unity-sds/unity-management-console/releases/download/0.2.3/managementconsole.zip" \
+                && unzip managementconsole.zip
               cwd: /home/ubuntu
+            02_run_management_console:
+              command: !Sub |
+                set -ex \
+                && echo "running 02_run_management_console" \
+                && ./main
+              cwd: /home/ubuntu/management-console
         deploy_unity-on-demand-api:
           commands:
             01_clone_repo:
@@ -346,7 +353,7 @@ Resources:
                 && git clone https://github.com/unity-sds/unity-on-demand-api.git /home/ubuntu/unity-on-demand-api \
                 && chown -R ubuntu:ubuntu /home/ubuntu/unity-on-demand-api
               cwd: /home/ubuntu
-            # NOTE: need to get the EKS cluster name created from the control plane (run_bootstrap)
+            # NOTE: need to get the EKS cluster name created from the management console (deploy_management_console)
             02_run_serverless_deploy:
               command: !Sub |
                 set -ex \
