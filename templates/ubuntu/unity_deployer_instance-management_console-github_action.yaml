@@ -16,7 +16,7 @@ Metadata:
           - KeyPairName
           - InstanceType
           - PrivilegedPolicyName
-          - LambdaExecutionRole
+          - LambdaExecutionRoleARN
           - UnityAppsToBootstap
           - GithubToken
     ParameterLabels:
@@ -30,8 +30,8 @@ Metadata:
         default: EC2 instance type
       PrivilegedPolicyName:
         default: Privileged (admin-level) IAM policy name
-      LambdaExecutionRole:
-        default: Lambda execution role
+      LambdaExecutionRoleARN:
+        default: Lambda execution role ARN
       UnityAppsToBootstap:
         default: Unity services to deploy by default
       GithubToken:
@@ -66,9 +66,10 @@ Parameters:
     Type: String
     Default: mcp-tenantOperator-AMI-APIG
 
-  LambdaExecutionRole:
-    Description: IAM role which allows for Lambda execution.
-    Type: AWS::IAM::Role
+  LambdaExecutionRoleARN:
+    Description: ARN for the IAM role which allows for Lambda execution.
+    Type: String
+    Default: arn:aws:iam::237868187491:role/MCP-ConfigLambdaExecutionRole-us-west-2
 
   UnityAppsToBootstap:
     Description: Unity services to deploy
@@ -104,7 +105,7 @@ Resources:
     Properties:
       Handler: index.handler
       Runtime: python3.8
-      Role: !Ref LambdaExecutionRole
+      Role: !Ref LambdaExecutionRoleARN
       MemorySize: 128
       Timeout: 20
       Code:
