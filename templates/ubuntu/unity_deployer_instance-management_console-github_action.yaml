@@ -76,6 +76,11 @@ Parameters:
     Type: String
     Default: arn:aws:iam::237868187491:role/MCP-ConfigLambdaExecutionRole-us-west-2
 
+  OIDCRoleARN:
+    Description: ARN for the IAM role which allows for OIDC Permissions.
+    Type: String
+    Default: arn:aws:iam::237868187491:role/mcp-Unity-Github-OIDC-Role
+
   UnityAppsToBootstap:
     Description: Unity services to deploy
     Type: String
@@ -110,7 +115,7 @@ Resources:
     Properties:
       Handler: index.handler
       Runtime: python3.8
-      Role: !Ref LambdaExecutionRoleARN
+      Role: !Ref OIDCRoleARN
       MemorySize: 128
       Timeout: 20
       Code:
