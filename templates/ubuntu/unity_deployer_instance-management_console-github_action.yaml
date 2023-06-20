@@ -153,17 +153,12 @@ Resources:
       Length: 5
       ServiceToken: !GetAtt RandomStringLambdaFunction.Arn
 
-  InstanceRole:
-    Type: AWS::IAM::Role
-    Properties:
-      Role: !Ref InstanceRoleARN
-
   InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
       Path: /
       Roles:
-        - !Ref InstanceRole
+        - !Ref InstanceRoleARN
 
   DeployerInstance:
     CreationPolicy:
