@@ -70,6 +70,16 @@ Parameters:
     Description: ARN for the IAM role which allows for Lambda execution.
     Type: String
     Default: arn:aws:iam::237868187491:role/MCP-ConfigLambdaExecutionRole-us-west-2
+ 
+  InstanceRoleARN:
+    Description: ARN for the IAM role which allows for Instance .
+    Type: String
+    Default: arn:aws:iam::237868187491:role/MCP-ConfigLambdaExecutionRole-us-west-2
+
+  OIDCRoleARN:
+    Description: ARN for the IAM role which allows for OIDC Permissions.
+    Type: String
+    Default: arn:aws:iam::237868187491:role/mcp-Unity-Github-OIDC-Role
 
   UnityAppsToBootstap:
     Description: Unity services to deploy
@@ -105,7 +115,7 @@ Resources:
     Properties:
       Handler: index.handler
       Runtime: python3.8
-      Role: !Ref LambdaExecutionRoleARN
+      Role: !Ref OIDCRoleARN
       MemorySize: 128
       Timeout: 20
       Code:
@@ -143,34 +153,12 @@ Resources:
       Length: 5
       ServiceToken: !GetAtt RandomStringLambdaFunction.Arn
 
-  InstanceRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: ec2.amazonaws.com
-            Action: sts:AssumeRole
-      Path: /
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
-        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
-        - arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
-        - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryPowerUser
-        # TODO: need to generalize for JPL, MCP and normal AWS accounts; currently these are specific to MCP
-        - !Sub "arn:aws:iam::${AWS::AccountId}:policy/${PrivilegedPolicyName}"
-        - !Sub "arn:aws:iam::${AWS::AccountId}:policy/DatalakeKinesisPolicy"
-        - !Sub "arn:aws:iam::${AWS::AccountId}:policy/McpToolsAccessPolicy"
-      PermissionsBoundary: !Sub "arn:aws:iam::${AWS::AccountId}:policy/${PrivilegedPolicyName}"
-
   InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
       Path: /
       Roles:
-        - !Ref InstanceRole
+        - !Ref InstanceRoleARN
 
   DeployerInstance:
     CreationPolicy:
