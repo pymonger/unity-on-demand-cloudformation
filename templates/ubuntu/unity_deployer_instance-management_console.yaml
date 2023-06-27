@@ -18,6 +18,8 @@ Metadata:
           - PrivilegedPolicyName
           - UnityAppsToBootstap
           - GithubToken
+          - Venue
+          - Proj
     ParameterLabels:
       VPCID:
         default: VPC ID
@@ -33,6 +35,10 @@ Metadata:
         default: Unity services to deploy by default
       GithubToken:
         default: Github token with repo:read access
+      Venue:
+        default: Venue that the resource is being deployed on
+      Proj:
+        default: Unity project
 
 Parameters:
   VPCID:
@@ -78,6 +84,16 @@ Parameters:
     NoEcho: true
     Description: Github token with repo:read access
     Type: String
+
+  Venue:
+    Description: Venue that the resource is being deployed on (e.g., Dev, Test, SIPS-test)
+    Type: String
+    Default: Dev
+
+  Proj:
+    Description: Unity Project (e.g., sips or unity)
+    Type: String
+    Default: unity
 
 Mappings:
   AWSRegion2AMI:
@@ -376,8 +392,26 @@ Resources:
         - !Ref DeployerSecurityGroup
       IamInstanceProfile: !Ref InstanceProfile
       Tags:
+        - Key: Venue
+          Value: !Ref Venue
+        - Key: ServiceArea
+          Value: cs
+        - Key: CapVersion
+          Value: 23.2
+        - Key: Component
+          Value: Unity Management Console
         - Key: Name
-          Value: !Sub "unity-deployer-instance-${RandomStringResource.RandomString}"
+          Value: Unity Management Console
+        - Key: Proj
+          Value: !Ref Proj
+        - Key: CreatedBy
+          Value: cs
+        - Key: Env
+          Value: !Ref Venue
+        - Key: Stack
+          Value: Unity Management Console
+        - Key: Unique ID
+          Value: !Sub "${RandomStringResource.RandomString}"
       UserData: !Base64
         Fn::Sub: |
           #!/bin/bash -xe

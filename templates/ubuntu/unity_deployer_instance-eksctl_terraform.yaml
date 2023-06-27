@@ -16,6 +16,8 @@ Metadata:
           - KeyPairName
           - InstanceType
           - PrivilegedPolicyName
+          - Venue
+          - Proj
     ParameterLabels:
       VPCID:
         default: VPC ID
@@ -27,6 +29,10 @@ Metadata:
         default: EC2 instance type
       PrivilegedPolicyName:
         default: Privileged (admin-level) IAM policy name
+      Venue:
+        default: Venue that the resource is being deployed on
+      Proj:
+        default: Unity project
 
 Parameters:
   VPCID:
@@ -56,6 +62,16 @@ Parameters:
     Description: Name of an existing IAM policy which allows privileged access to AWS services.
     Type: String
     Default: mcp-tenantOperator-AMI-APIG
+
+  Venue:
+    Description: Venue that the resource is being deployed on (e.g., Dev, Test, SIPS-test)
+    Type: String
+    Default: Dev
+
+  Proj:
+    Description: Unity Project (e.g., sips or unity)
+    Type: String
+    Default: unity
 
 Mappings:
   AWSRegion2AMI:
@@ -522,8 +538,26 @@ Resources:
         - !Ref DeployerSecurityGroup
       IamInstanceProfile: !Ref InstanceProfile
       Tags:
+        - Key: Venue
+          Value: !Ref Venue
+        - Key: ServiceArea
+          Value: cs
+        - Key: CapVersion
+          Value: 23.2
+        - Key: Component
+          Value: Unity Management Console
         - Key: Name
-          Value: !Sub "unity-deployer-instance-${RandomStringResource.RandomString}"
+          Value: Unity Management Console
+        - Key: Proj
+          Value: !Ref Proj
+        - Key: CreatedBy
+          Value: cs
+        - Key: Env
+          Value: !Ref Venue
+        - Key: Stack
+          Value: Unity Management Console
+        - Key: Unique ID
+          Value: !Sub "${RandomStringResource.RandomString}"
       UserData: !Base64
         Fn::Sub: |
           #!/bin/bash -xe
