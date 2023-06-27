@@ -329,7 +329,7 @@ Resources:
               command: !Sub |
                 set -ex \
                 && echo "running 02_run_management_console" \
-                && ./main
+                && ./main webapp
               cwd: /home/ubuntu/management-console
         deploy_unity-on-demand-api:
           commands:
