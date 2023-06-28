@@ -366,7 +366,7 @@ Resources:
               command: !Sub |
                 set -ex \
                 && echo "running 02_run_management_console" \
-                && sudo -i -u ubuntu /home/ubuntu/management-console/main webapp
+                && sudo -u ubuntu ./main webapp > /var/log/management-console.log 2>&1 &
               cwd: /home/ubuntu/management-console
     Properties:
       ImageId: !FindInMap [AWSRegion2AMI, !Ref 'AWS::Region', HVM64]
