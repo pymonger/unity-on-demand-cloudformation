@@ -212,7 +212,6 @@ Resources:
           deployer_install:
             - install_cfn
             - install_deployer_tools
-            - deploy_unity-on-demand-api
             - deploy_management_console
         install_cfn:
           files:
@@ -360,28 +359,6 @@ Resources:
                 && echo "running 02_run_management_console" \
                 && ./main webapp
               cwd: /home/ubuntu/management-console
-        deploy_unity-on-demand-api:
-          commands:
-            01_clone_repo:
-              command: !Sub |
-                set -ex \
-                && echo "running 01_clone_repo" \
-                && git clone https://github.com/unity-sds/unity-on-demand-api.git /home/ubuntu/unity-on-demand-api \
-                && chown -R ubuntu:ubuntu /home/ubuntu/unity-on-demand-api
-              cwd: /home/ubuntu
-            # NOTE: need to get the EKS cluster name created from the management console (deploy_management_console)
-            02_run_serverless_deploy:
-              command: !Sub |
-                set -ex \
-                && echo "running 02_run_serverless_deploy" \
-                && sudo -i -u ubuntu bash -c "cd ~/unity-on-demand-api \
-                   && serverless plugin install -n serverless-python-requirements \
-                   && serverless plugin install -n serverless-wsgi \
-                   && serverless deploy --param cluster_name=unity-sps-on-demand-${RandomStringResource.RandomString} \
-                                        --param permissionsBoundaryPolicyName=${PrivilegedPolicyName} \
-                                        --region ${AWS::Region} \
-                                        --stage ${RandomStringResource.RandomString}"
-              cwd: /home/ubuntu/unity-on-demand-api
     Properties:
       ImageId: !FindInMap [AWSRegion2AMI, !Ref 'AWS::Region', HVM64]
       InstanceType: !Ref InstanceType
