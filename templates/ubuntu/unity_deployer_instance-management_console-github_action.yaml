@@ -287,29 +287,23 @@ Resources:
                 && git clone --depth=1 https://github.com/tfutils/tfenv.git /home/ubuntu/.tfenv \
                 && chown -R ubuntu:ubuntu /home/ubuntu/.tfenv \
                 && ln -s /home/ubuntu/.tfenv/bin/* /usr/local/bin
-            05_clone_unity_sps_repo:
+            05_install_awscli:
               command: !Sub |
                 set -ex \
-                && echo "running 05_clone_unity_sps_repo" \
-                && git clone https://github.com/unity-sds/unity-sps-prototype.git /home/ubuntu/unity-sps-prototype \
-                && chown -R ubuntu:ubuntu /home/ubuntu/unity-sps-prototype
-            06_install_awscli:
-              command: !Sub |
-                set -ex \
-                && echo "running 06_install_awscli" \
+                && echo "running 05_install_awscli" \
                 && pip3 install -U awscli \
                 && ln -s /usr/local/bin/aws /bin/aws
-            07_install_conda:
+            06_install_conda:
               command: !Sub |
                 set -ex \
-                && echo "running 07_install_conda" \
+                && echo "running 06_install_conda" \
                 && curl -sSL https://repo.anaconda.com/miniconda/Miniconda3-py39_22.11.1-1-Linux-x86_64.sh -o /tmp/install_miniconda.sh \
                 && chmod 755 /tmp/install_miniconda.sh \
                 && bash /tmp/install_miniconda.sh -b -p /usr/local -u
-            08_install_serverless:
+            07_install_serverless:
               command: !Sub |
                 set -ex \
-                && echo "running 08_install_serverless" \
+                && echo "running 07_install_serverless" \
                 && curl -sSL https://nodejs.org/dist/v16.20.0/node-v16.20.0-linux-x64.tar.gz -o /tmp/node-v16.20.0-linux-x64.tar.gz \
                 && tar xvfz /tmp/node-v16.20.0-linux-x64.tar.gz -C /usr/local \
                 && ln -sf /usr/local/node-v16.20.0-linux-x64/bin/node /usr/local/bin/ \
@@ -319,6 +313,12 @@ Resources:
                 && npm install -g serverless \
                 && ln -sf /usr/local/node-v16.20.0-linux-x64/bin/serverless /usr/local/bin/ \
                 && ln -sf /usr/local/node-v16.20.0-linux-x64/bin/sls /usr/local/bin/
+            08_create_unity_config_directory:
+              command: !Sub |
+                set -ex \
+                && echo "running 08_create_unity_config_directory" \
+                && mkdir /home/ubuntu/.unity \
+                && chown -R ubuntu:ubuntu /home/ubuntu/.unity
         deploy_management_console:
           files:
             /home/ubuntu/.unity/unity.yaml:
@@ -334,14 +334,14 @@ Resources:
               command: !Sub |
                 set -ex \
                 && echo "running 01_install_management_console" \
-                && wget -q -O managementconsole.zip "https://github.com/unity-sds/unity-management-console/releases/download/0.2.5/managementconsole.zip" \
-                && unzip managementconsole.zip
+                && sudo -i -u ubuntu wget -q -O managementconsole.zip "https://github.com/unity-sds/unity-management-console/releases/download/0.2.9/managementconsole.zip" \
+                && sudo -i -u ubuntu unzip managementconsole.zip
               cwd: /home/ubuntu
             02_run_management_console:
               command: !Sub |
                 set -ex \
                 && echo "running 02_run_management_console" \
-                && ./main webapp
+                && sudo -i -u ubuntu /home/ubuntu/management-console/main webapp
               cwd: /home/ubuntu/management-console
     Properties:
       ImageId: !FindInMap [AWSRegion2AMI, !Ref 'AWS::Region', HVM64]
