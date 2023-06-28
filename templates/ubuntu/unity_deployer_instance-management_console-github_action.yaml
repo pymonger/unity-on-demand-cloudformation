@@ -320,6 +320,15 @@ Resources:
                 && ln -sf /usr/local/node-v16.20.0-linux-x64/bin/serverless /usr/local/bin/ \
                 && ln -sf /usr/local/node-v16.20.0-linux-x64/bin/sls /usr/local/bin/
         deploy_management_console:
+          files:
+            /home/ubuntu/.unity/unity.yaml:
+              content: !Sub |
+                GithubToken: ${GithubToken}
+                WorkflowBasePath: /home/ubuntu/management-console/workflowresources/.github/workflows
+                Workdir: /home/ubuntu/management-console/workflowresources/
+              group: ubuntu
+              mode: "000644"
+              owner: ubuntu
           commands:
             01_install_management_console:
               command: !Sub |
