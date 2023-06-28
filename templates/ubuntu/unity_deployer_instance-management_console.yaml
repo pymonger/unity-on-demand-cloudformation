@@ -18,6 +18,8 @@ Metadata:
           - PrivilegedPolicyName
           - UnityAppsToBootstap
           - GithubToken
+          - Venue
+          - Proj
     ParameterLabels:
       VPCID:
         default: VPC ID
@@ -33,6 +35,10 @@ Metadata:
         default: Unity services to deploy by default
       GithubToken:
         default: Github token with repo:read access
+      Venue:
+        default: Venue that the resource is being deployed on
+      Proj:
+        default: Unity project
 
 Parameters:
   VPCID:
@@ -78,6 +84,16 @@ Parameters:
     NoEcho: true
     Description: Github token with repo:read access
     Type: String
+
+  Venue:
+    Description: Venue that the resource is being deployed on (e.g., Dev, Test, SIPS-test)
+    Type: String
+    Default: Dev
+
+  Proj:
+    Description: Unity Project (e.g., sips or unity)
+    Type: String
+    Default: unity
 
 Mappings:
   AWSRegion2AMI:
@@ -196,7 +212,6 @@ Resources:
           deployer_install:
             - install_cfn
             - install_deployer_tools
-            - deploy_unity-on-demand-api
             - deploy_management_console
         install_cfn:
           files:
@@ -259,7 +274,7 @@ Resources:
               mode: "000644"
               owner: ubuntu
           packages:
-            yum:
+            apt:
               docker.io: []
               git: []
           services:
@@ -297,29 +312,23 @@ Resources:
                 && git clone --depth=1 https://github.com/tfutils/tfenv.git /home/ubuntu/.tfenv \
                 && chown -R ubuntu:ubuntu /home/ubuntu/.tfenv \
                 && ln -s /home/ubuntu/.tfenv/bin/* /usr/local/bin
-            05_clone_unity_sps_repo:
+            05_install_awscli:
               command: !Sub |
                 set -ex \
-                && echo "running 05_clone_unity_sps_repo" \
-                && git clone https://github.com/unity-sds/unity-sps-prototype.git /home/ubuntu/unity-sps-prototype \
-                && chown -R ubuntu:ubuntu /home/ubuntu/unity-sps-prototype
-            06_install_awscli:
-              command: !Sub |
-                set -ex \
-                && echo "running 06_install_awscli" \
+                && echo "running 05_install_awscli" \
                 && pip3 install -U awscli \
                 && ln -s /usr/local/bin/aws /bin/aws
-            07_install_conda:
+            06_install_conda:
               command: !Sub |
                 set -ex \
-                && echo "running 07_install_conda" \
+                && echo "running 06_install_conda" \
                 && curl -sSL https://repo.anaconda.com/miniconda/Miniconda3-py39_22.11.1-1-Linux-x86_64.sh -o /tmp/install_miniconda.sh \
                 && chmod 755 /tmp/install_miniconda.sh \
                 && bash /tmp/install_miniconda.sh -b -p /usr/local -u
-            08_install_serverless:
+            07_install_serverless:
               command: !Sub |
                 set -ex \
-                && echo "running 08_install_serverless" \
+                && echo "running 07_install_serverless" \
                 && curl -sSL https://nodejs.org/dist/v16.20.0/node-v16.20.0-linux-x64.tar.gz -o /tmp/node-v16.20.0-linux-x64.tar.gz \
                 && tar xvfz /tmp/node-v16.20.0-linux-x64.tar.gz -C /usr/local \
                 && ln -sf /usr/local/node-v16.20.0-linux-x64/bin/node /usr/local/bin/ \
@@ -329,43 +338,36 @@ Resources:
                 && npm install -g serverless \
                 && ln -sf /usr/local/node-v16.20.0-linux-x64/bin/serverless /usr/local/bin/ \
                 && ln -sf /usr/local/node-v16.20.0-linux-x64/bin/sls /usr/local/bin/
+            08_create_unity_config_directory:
+              command: !Sub |
+                set -ex \
+                && echo "running 08_create_unity_config_directory" \
+                && mkdir /home/ubuntu/.unity \
+                && chown -R ubuntu:ubuntu /home/ubuntu/.unity
         deploy_management_console:
+          files:
+            /home/ubuntu/.unity/unity.yaml:
+              content: !Sub |
+                GithubToken: ${GithubToken}
+                WorkflowBasePath: /home/ubuntu/management-console/workflowresources/.github/workflows
+                Workdir: /home/ubuntu/management-console/workflowresources/
+              group: ubuntu
+              mode: "000644"
+              owner: ubuntu
           commands:
             01_install_management_console:
               command: !Sub |
                 set -ex \
                 && echo "running 01_install_management_console" \
-                && wget -q -O managementconsole.zip "https://github.com/unity-sds/unity-management-console/releases/download/0.2.5/managementconsole.zip" \
-                && unzip managementconsole.zip
+                && sudo -i -u ubuntu wget -q -O managementconsole.zip "https://github.com/unity-sds/unity-management-console/releases/download/0.2.9/managementconsole.zip" \
+                && sudo -i -u ubuntu unzip managementconsole.zip
               cwd: /home/ubuntu
             02_run_management_console:
               command: !Sub |
                 set -ex \
                 && echo "running 02_run_management_console" \
-                && ./main webapp
+                && sudo -u ubuntu ./main webapp > /var/log/management-console.log 2>&1 &
               cwd: /home/ubuntu/management-console
-        deploy_unity-on-demand-api:
-          commands:
-            01_clone_repo:
-              command: !Sub |
-                set -ex \
-                && echo "running 01_clone_repo" \
-                && git clone https://github.com/unity-sds/unity-on-demand-api.git /home/ubuntu/unity-on-demand-api \
-                && chown -R ubuntu:ubuntu /home/ubuntu/unity-on-demand-api
-              cwd: /home/ubuntu
-            # NOTE: need to get the EKS cluster name created from the management console (deploy_management_console)
-            02_run_serverless_deploy:
-              command: !Sub |
-                set -ex \
-                && echo "running 02_run_serverless_deploy" \
-                && sudo -i -u ubuntu bash -c "cd ~/unity-on-demand-api \
-                   && serverless plugin install -n serverless-python-requirements \
-                   && serverless plugin install -n serverless-wsgi \
-                   && serverless deploy --param cluster_name=unity-sps-on-demand-${RandomStringResource.RandomString} \
-                                        --param permissionsBoundaryPolicyName=${PrivilegedPolicyName} \
-                                        --region ${AWS::Region} \
-                                        --stage ${RandomStringResource.RandomString}"
-              cwd: /home/ubuntu/unity-on-demand-api
     Properties:
       ImageId: !FindInMap [AWSRegion2AMI, !Ref 'AWS::Region', HVM64]
       InstanceType: !Ref InstanceType
@@ -376,8 +378,26 @@ Resources:
         - !Ref DeployerSecurityGroup
       IamInstanceProfile: !Ref InstanceProfile
       Tags:
+        - Key: Venue
+          Value: !Ref Venue
+        - Key: ServiceArea
+          Value: cs
+        - Key: CapVersion
+          Value: 23.2
+        - Key: Component
+          Value: Unity Management Console
         - Key: Name
-          Value: !Sub "unity-deployer-instance-${RandomStringResource.RandomString}"
+          Value: Unity Management Console
+        - Key: Proj
+          Value: !Ref Proj
+        - Key: CreatedBy
+          Value: cs
+        - Key: Env
+          Value: !Ref Venue
+        - Key: Stack
+          Value: Unity Management Console
+        - Key: Unique ID
+          Value: !Sub "${RandomStringResource.RandomString}"
       UserData: !Base64
         Fn::Sub: |
           #!/bin/bash -xe
@@ -400,14 +420,14 @@ Resources:
           IpProtocol: tcp
           ToPort: 22
         - CidrIp: 0.0.0.0/0
-          FromPort: 45321
+          FromPort: 8080
           IpProtocol: tcp
-          ToPort: 45321
+          ToPort: 8080
       SecurityGroupEgress:
         - CidrIp: 0.0.0.0/0
           IpProtocol: "-1"
 
 Outputs:
-  ControlPlaneURL:
-    Description: The URL for the Unity Control Plane
-    Value: !Sub "http://${DeployerInstance.PublicDnsName}:45321/ping"
+  ManagementConsoleURL:
+    Description: The URL for the Unity Management Console
+    Value: !Sub "http://${DeployerInstance.PublicDnsName}:8080/ui/landing"
