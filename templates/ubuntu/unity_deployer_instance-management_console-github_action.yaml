@@ -334,7 +334,7 @@ Resources:
               command: !Sub |
                 set -ex \
                 && echo "running 01_install_management_console" \
-                && sudo -i -u ubuntu wget -q -O managementconsole.zip "https://github.com/unity-sds/unity-management-console/releases/download/0.2.9/managementconsole.zip" \
+                && sudo -i -u ubuntu wget -q -O managementconsole.zip "https://github.com/unity-sds/unity-management-console/releases/download/0.2.10/managementconsole.zip" \
                 && sudo -i -u ubuntu unzip managementconsole.zip
               cwd: /home/ubuntu
             02_run_management_console:
