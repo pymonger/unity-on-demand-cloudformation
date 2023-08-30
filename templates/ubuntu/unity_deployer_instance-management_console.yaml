@@ -81,9 +81,9 @@ Parameters:
     ConstraintDescription: must be a valid Unity service
 
   GithubToken:
-    NoEcho: true
     Description: Github token with repo:read access
     Type: String
+    NoEcho: true
 
   Venue:
     Description: Venue that the resource is being deployed on (e.g., Dev, Test, SIPS-test)
@@ -107,7 +107,6 @@ Mappings:
       HVM64: ami-0291bdfdc140275bf
 
 Resources:
-
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -123,10 +122,10 @@ Resources:
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
-              - Effect: "Allow"
+              - Effect: Allow
                 Action:
-                  - "logs:*"
-                Resource: "*"
+                  - logs:*
+                Resource: '*'
       PermissionsBoundary: !Sub "arn:aws:iam::${AWS::AccountId}:policy/${PrivilegedPolicyName}"
 
   RandomStringLambdaFunction:
@@ -143,11 +142,11 @@ Resources:
           import logging
           import random
           import string
-          
+
           logger = logging.getLogger()
           logger.setLevel(logging.INFO)
-          
-          
+
+
           def get_random_string(event, context):
               random_string = "".join(
                   random.choice(string.ascii_lowercase + string.digits)
@@ -155,8 +154,8 @@ Resources:
               )
               logger.info("Random string generated: %s", random_string)
               return random_string
-          
-          
+
+
           def handler(event, context):
               response_data = dict()
               try:
@@ -188,6 +187,7 @@ Resources:
         - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
         - arn:aws:iam::aws:policy/AmazonS3ReadOnlyAccess
         - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryPowerUser
+
         # TODO: need to generalize for JPL, MCP and normal AWS accounts; currently these are specific to MCP
         - !Sub "arn:aws:iam::${AWS::AccountId}:policy/${PrivilegedPolicyName}"
         - !Sub "arn:aws:iam::${AWS::AccountId}:policy/DatalakeKinesisPolicy"
@@ -259,16 +259,16 @@ Resources:
             /home/ubuntu/.bash_profile:
               content: !Sub |
                 # .bash_profile
-                
+
                 # Get the aliases and functions
                 if [ -f ~/.bashrc ]; then
                         . ~/.bashrc
                 fi
-                
+
                 # User specific environment and startup programs
-                
+
                 PATH=$HOME/.local/bin:$HOME/bin:/usr/local/bin:$PATH
-                
+
                 export PATH
               group: ubuntu
               mode: "000644"
@@ -292,6 +292,7 @@ Resources:
                 && chmod +x /usr/local/bin/eksctl \
                 && ln -s /usr/local/bin/eksctl /bin/eksctl
             02_install_kubectl:
+
               # TODO: install the version of kubectl that matches the k8s server version specified above
               command: !Sub |
                 set -ex \
